@@ -1,5 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../domain/entities/auto_lock_timeout.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'biometric_service.dart';
 import 'pin_storage.dart';
@@ -9,6 +10,7 @@ class AuthRepositoryImpl implements AuthRepository {
   final BiometricService _biometricService;
   final FlutterSecureStorage _secureStorage;
   static const _biometricEnabledKey = 'vault_biometric_enabled_v1';
+  static const _autoLockTimeoutKey = 'vault_auto_lock_timeout_v1';
 
   AuthRepositoryImpl({
     PinStorage? pinStorage,
@@ -40,4 +42,18 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<bool> authenticateWithBiometrics() => _biometricService.authenticate();
+
+  @override
+  Future<AutoLockTimeout> getAutoLockTimeout() async {
+    final stored = await _secureStorage.read(key: _autoLockTimeoutKey);
+    return AutoLockTimeout.values.firstWhere(
+      (value) => value.name == stored,
+      orElse: () => AutoLockTimeout.immediate,
+    );
+  }
+
+  @override
+  Future<void> setAutoLockTimeout(AutoLockTimeout value) {
+    return _secureStorage.write(key: _autoLockTimeoutKey, value: value.name);
+  }
 }

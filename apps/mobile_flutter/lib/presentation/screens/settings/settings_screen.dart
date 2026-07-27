@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../application/auth/auth_controller.dart';
 import '../../../application/providers.dart';
+import '../../../domain/entities/auto_lock_timeout.dart';
+import '../backup/backup_screen.dart';
+import '../organization/organization_screen.dart';
+import '../storage/storage_screen.dart';
+import '../trash/trash_screen.dart';
 import 'change_pin_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -15,6 +20,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
+  AutoLockTimeout _autoLockTimeout = AutoLockTimeout.immediate;
   bool _loading = true;
 
   @override
@@ -27,10 +33,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final authRepo = ref.read(authRepositoryProvider);
     final available = await authRepo.isBiometricAvailable();
     final enabled = await authRepo.isBiometricEnabled();
+    final autoLockTimeout = await authRepo.getAutoLockTimeout();
     if (!mounted) return;
     setState(() {
       _biometricAvailable = available;
       _biometricEnabled = enabled;
+      _autoLockTimeout = autoLockTimeout;
       _loading = false;
     });
   }
@@ -38,6 +46,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _toggleBiometric(bool value) async {
     await ref.read(authRepositoryProvider).setBiometricEnabled(value);
     setState(() => _biometricEnabled = value);
+  }
+
+  Future<void> _pickAutoLockTimeout() async {
+    final chosen = await showModalBottomSheet<AutoLockTimeout>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: RadioGroup<AutoLockTimeout>(
+          groupValue: _autoLockTimeout,
+          onChanged: (value) => Navigator.of(context).pop(value),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final option in AutoLockTimeout.values)
+                RadioListTile<AutoLockTimeout>(title: Text(option.label), value: option),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (chosen == null) return;
+    await ref.read(authRepositoryProvider).setAutoLockTimeout(chosen);
+    setState(() => _autoLockTimeout = chosen);
   }
 
   @override
@@ -66,11 +96,65 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 ListTile(
+                  leading: const Icon(Icons.timer_outlined),
+                  title: const Text('Bloqueo automático'),
+                  subtitle: Text('Al volver a la app tras: ${_autoLockTimeout.label}'),
+                  onTap: _pickAutoLockTimeout,
+                ),
+                ListTile(
                   leading: const Icon(Icons.lock_outline),
                   title: const Text('Bloquear ahora'),
-                  onTap: () {
-                    ref.read(authControllerProvider.notifier).lock();
-                    Navigator.of(context).pop();
+                  onTap: () => ref.read(authControllerProvider.notifier).lock(),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.label_outline),
+                  title: const Text('Organización'),
+                  subtitle: const Text('Etiquetas, colecciones y álbumes inteligentes'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const OrganizationScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('Papelera'),
+                  trailing: ref.watch(vaultTrashedFilesStreamProvider).maybeWhen(
+                        data: (files) => files.isEmpty ? null : CircleAvatar(
+                          radius: 12,
+                          child: Text('${files.length}', style: const TextStyle(fontSize: 12)),
+                        ),
+                        orElse: () => null,
+                      ),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TrashScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.pie_chart_outline),
+                  title: const Text('Almacenamiento'),
+                  subtitle: const Text('Espacio usado, duplicados, limpiar caché'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const StorageScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.backup_outlined),
+                  title: const Text('Copia de seguridad'),
+                  subtitle: const Text('Exportar o restaurar la bóveda completa'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const BackupScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.restart_alt_outlined),
+                  title: const Text('Restablecer preguntas de importación'),
+                  subtitle: const Text('Vuelve a preguntar "Eliminar originales" y "Acceso a carpeta"'),
+                  onTap: () async {
+                    await ref.read(importPreferencesProvider).resetAll();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Preferencias de importación restablecidas.')),
+                    );
                   },
                 ),
               ],

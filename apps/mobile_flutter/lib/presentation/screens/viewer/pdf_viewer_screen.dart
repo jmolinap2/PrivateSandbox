@@ -4,7 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/entities/vault_file.dart';
 import 'decrypted_playback_view.dart';
-import 'export_action.dart';
+import 'restore_action.dart';
+import 'share_action.dart';
 
 class PdfViewerScreen extends ConsumerWidget {
   final VaultFile file;
@@ -17,9 +18,10 @@ class PdfViewerScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(file.originalName),
         actions: [
+          ShareActionButton(file: file),
           IconButton(
             icon: const Icon(Icons.file_download_outlined),
-            onPressed: () => exportVaultFile(context, ref, file),
+            onPressed: () => restoreVaultFile(context, ref, file),
           ),
         ],
       ),

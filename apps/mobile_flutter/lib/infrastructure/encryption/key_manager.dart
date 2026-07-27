@@ -35,6 +35,22 @@ class KeyManager {
     return newKey;
   }
 
+  /// Raw master key bytes, for wrapping into a portable backup. Never
+  /// written anywhere in this form — callers must encrypt it before it
+  /// leaves the process.
+  Future<Uint8List> exportMasterKeyBytes() async {
+    final key = await getOrCreateMasterKey();
+    return Uint8List.fromList(await key.extractBytes());
+  }
+
+  /// Overwrites the master key with [bytes] recovered from a backup. Every
+  /// existing file's key is derived from the master key, so this only
+  /// makes sense as part of a full vault restore (DB + blobs replaced to
+  /// match), never on its own.
+  Future<void> importMasterKeyBytes(Uint8List bytes) {
+    return _secureStorage.write(key: _masterKeyStorageKey, value: base64Encode(bytes));
+  }
+
   /// Derives a unique per-file key via HKDF-SHA256, using the file's random
   /// salt as the HKDF salt. No two files share a key, so compromising one
   /// file's key cannot be used to decrypt another.
@@ -43,6 +59,17 @@ class KeyManager {
       secretKey: masterKey,
       nonce: fileSalt,
       info: utf8.encode('private-sandbox-vault-file-key-v1'),
+    );
+  }
+
+  /// Derives the key used for a file's thumbnail — same salt as the main
+  /// content, but a different HKDF `info` context, so it's a fully
+  /// independent key (no nonce-space bookkeeping needed between the two).
+  Future<SecretKey> deriveThumbnailKey(SecretKey masterKey, Uint8List fileSalt) {
+    return _hkdf.deriveKey(
+      secretKey: masterKey,
+      nonce: fileSalt,
+      info: utf8.encode('private-sandbox-vault-thumbnail-key-v1'),
     );
   }
 }

@@ -1,8 +1,15 @@
 import '../entities/vault_file.dart';
 
 abstract interface class VaultRepository {
-  /// Emits the list of fully-imported files, most recent first.
+  /// Emits the list of fully-imported, non-trashed files, most recent first.
   Stream<List<VaultFile>> watchFiles();
+
+  /// Emits files currently in the trash, most recently trashed first.
+  Stream<List<VaultFile>> watchTrashedFiles();
+
+  /// Emits non-trashed files filed directly under [folderId] (null for
+  /// unfiled/root files), most recent first.
+  Stream<List<VaultFile>> watchFilesInFolder(String? folderId);
 
   Future<VaultFile?> getById(String id);
 
@@ -23,6 +30,26 @@ abstract interface class VaultRepository {
   });
 
   /// Removes the DB row. Callers are responsible for deleting the
-  /// corresponding ciphertext blob from disk.
+  /// corresponding ciphertext blob from disk. Used for permanent deletion —
+  /// everyday "delete" from the library should go through [moveToTrash]
+  /// instead.
   Future<void> deleteFile(String id);
+
+  /// Hides the file from the library without touching its ciphertext —
+  /// the "papelera privada" the file can still be recovered from.
+  Future<void> moveToTrash(String id);
+
+  /// Brings a trashed file back into the active library.
+  Future<void> restoreFromTrash(String id);
+
+  /// Files a file under [folderId], or clears it back to "unfiled" if null.
+  Future<void> moveFileToFolder(String id, String? folderId);
+
+  Future<void> setFavorite(String id, bool isFavorite);
+
+  /// Records that [id] was opened just now, and (for audio/video) its
+  /// last playback position so playback can resume from there.
+  Future<void> recordOpened(String id, {int? playbackPositionMs});
+
+  Future<void> setThumbnail(String id, {required String fileName, required String noncePrefixBase64});
 }

@@ -1,8 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Biometric unlock (local_auth). No storage permissions are needed for
-         import: files are picked via the Storage Access Framework. -->
+    <!-- Biometric unlock (local_auth). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+
+    <!-- The in-app "Galería" picker queries photos/videos directly via
+         MediaStore (photo_manager) so it can reliably delete the original
+         after import — the privacy-friendly Photo Picker doesn't allow
+         that. "Explorador de archivos" needs none of this; it uses the
+         Storage Access Framework instead. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
         android:label="PrivateSandbox"
@@ -30,6 +38,19 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Grants a chosen app one-shot read access to a single decrypted
+             temp file for the "compartición controlada" share sheet. Private
+             (exported=false); URIs are only usable via the grant flag. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.privatesandbox.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

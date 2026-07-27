@@ -1,7 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../domain/entities/activity_event.dart';
 import '../providers.dart';
 import 'lock_state.dart';
+
+const _uuid = Uuid();
 
 /// Drives the app's single lock gate: whether a PIN still needs to be
 /// created, the vault is locked, or it has been unlocked for this session.
@@ -30,6 +34,8 @@ class AuthController extends Notifier<LockState> {
     if (ok) {
       await ref.read(recoveryUseCaseProvider).recoverInterruptedImports();
       state = LockState.unlocked;
+    } else {
+      await _logAccessDenied('PIN incorrecto');
     }
     return ok;
   }
@@ -43,8 +49,20 @@ class AuthController extends Notifier<LockState> {
     if (ok) {
       await ref.read(recoveryUseCaseProvider).recoverInterruptedImports();
       state = LockState.unlocked;
+    } else {
+      await _logAccessDenied('Biometría fallida o cancelada');
     }
     return ok;
+  }
+
+  Future<void> _logAccessDenied(String reason) {
+    return ref.read(activityRepositoryProvider).logEvent(ActivityEvent(
+          id: _uuid.v4(),
+          type: ActivityEventType.accessDenied,
+          fileName: reason,
+          timestamp: DateTime.now(),
+          success: false,
+        ));
   }
 
   void lock() {

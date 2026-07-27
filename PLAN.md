@@ -103,11 +103,8 @@ Convertir la bóveda en una aplicación multimedia completa.
   - Documentos.
 - Reproductor avanzado de video.
 - Reproductor avanzado de audio.
-- Reproducción en segundo plano.
 - Reanudación desde la última posición.
 - Velocidad de reproducción.
-- Control de subtítulos.
-- Selección de pistas de audio.
 - Gestos para:
   - Volumen.
   - Brillo.
@@ -285,25 +282,26 @@ El usuario puede acceder a su bóveda desde varios dispositivos manteniendo cifr
 
 ---
 
-# Fase 5 — Plataforma privada inteligente
+# Fase 5 — Plataforma privada avanzada
 
 ## Objetivo
 
 Diferenciar el producto más allá de una bóveda convencional.
 
+**Sin inteligencia artificial.** Toda la funcionalidad de esta fase debe ser
+determinista y explicable: reglas definidas por el usuario, metadatos,
+hashes y extracción directa de texto. No se incorporan modelos de
+aprendizaje automático de ningún tipo, ni locales ni remotos.
+
 ## Funcionalidades
 
-- OCR local.
-- Indexación de documentos.
-- Búsqueda por contenido.
-- Clasificación automática de archivos.
-- Detección de duplicados.
-- Detección de archivos similares.
-- Reconocimiento local de objetos.
-- Reconocimiento local de rostros.
-- Agrupación automática.
-- Reglas de organización.
-- Etiquetado automático.
+- Indexación de documentos mediante extracción directa de texto (PDF con capa de texto, TXT, y formatos similares).
+- Búsqueda por contenido sobre el texto extraído y los metadatos registrados.
+- Clasificación automática de archivos por reglas deterministas: tipo MIME, extensión, tamaño, fechas y carpeta de origen.
+- Detección de duplicados exactos por hash.
+- Agrupación automática por criterios explícitos: fecha, carpeta de origen, tipo o etiqueta.
+- Reglas de organización definidas por el usuario.
+- Etiquetado automático derivado de esas mismas reglas.
 - Archivos sensibles con protección adicional.
 - Múltiples bóvedas.
 - Claves independientes por bóveda.
@@ -321,15 +319,15 @@ Diferenciar el producto más allá de una bóveda convencional.
   - Nuevos reproductores.
   - Procesadores de archivos.
   - Indexadores.
-  - Clasificadores.
+  - Motores de reglas.
 - Automatizaciones locales.
 - Procesamiento sin conexión.
-- Modelos de inteligencia artificial ejecutados en el dispositivo.
 
 ## Consideraciones técnicas
 
-- La inteligencia artificial debe ejecutarse localmente siempre que sea posible.
-- Los modelos no deben acceder directamente a archivos descifrados fuera del entorno controlado.
+- Ninguna funcionalidad puede depender de modelos de aprendizaje automático, ni ejecutados en el dispositivo ni en un servicio externo.
+- Toda clasificación, agrupación o etiquetado debe ser reproducible: las mismas entradas y reglas producen siempre el mismo resultado, y el usuario puede consultar por qué se aplicó cada regla.
+- La extracción de texto se limita a formatos que ya lo contienen; no se infiere texto de imágenes.
 - Los índices generados también deben permanecer cifrados.
 - La función de perfil señuelo debe diseñarse con cuidado para no comprometer la bóveda principal.
 
@@ -543,6 +541,7 @@ Responsable de:
 13. Debe respetarse Scoped Storage.
 14. Las fases 1, 2 y 3 deben ser publicables por separado.
 15. Las nuevas fases no deben obligar al usuario a volver a importar su bóveda.
+16. La aplicación no incorpora inteligencia artificial ni modelos de aprendizaje automático en ninguna fase. Toda automatización es determinista y basada en reglas.
 
 ---
 
@@ -562,7 +561,7 @@ Fase 4
 Sincronización y múltiples dispositivos
         ↓
 Fase 5
-Plataforma privada inteligente
+Plataforma privada avanzada
 ```
 
 ---
@@ -587,4 +586,4 @@ Bóveda sincronizada entre dispositivos.
 
 ## Producto 5
 
-Plataforma privada inteligente para archivos y contenido multimedia.
+Plataforma privada avanzada para archivos y contenido multimedia.

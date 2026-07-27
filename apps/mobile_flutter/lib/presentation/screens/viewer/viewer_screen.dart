@@ -12,13 +12,45 @@ import 'video_player_screen.dart';
 
 /// Resolves [fileId] from the vault and dispatches to the viewer matching
 /// its [FileCategory].
-class ViewerScreen extends ConsumerWidget {
+///
+/// [queueIds] is the ordered list of file ids the user was looking at when
+/// they tapped this one (e.g. a collection/album/filtered library). For
+/// video/audio it becomes the playback queue, so the player can advance to
+/// the next track; other categories ignore it.
+class ViewerScreen extends ConsumerStatefulWidget {
   final String fileId;
+  final List<String>? queueIds;
 
-  const ViewerScreen({super.key, required this.fileId});
+  const ViewerScreen({super.key, required this.fileId, this.queueIds});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ViewerScreen> createState() => _ViewerScreenState();
+}
+
+class _ViewerScreenState extends ConsumerState<ViewerScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Recorded once per screen open, not on every rebuild the vault files
+    // stream triggers (e.g. another file's favorite being toggled).
+    ref.read(vaultRepositoryProvider).recordOpened(widget.fileId);
+  }
+
+  /// Builds the same-category playback queue for [file], preserving the order
+  /// the ids were given in. Falls back to just [file] when there's no queue.
+  List<VaultFile> _buildQueue(VaultFile file, List<VaultFile> allFiles) {
+    final ids = widget.queueIds;
+    if (ids == null || ids.isEmpty) return [file];
+    final byId = {for (final f in allFiles) f.id: f};
+    final queue = <VaultFile>[
+      for (final id in ids)
+        if (byId[id] case final f? when f.category == file.category) f,
+    ];
+    return queue.isEmpty ? [file] : queue;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final filesAsync = ref.watch(vaultFilesStreamProvider);
 
     return filesAsync.when(
@@ -27,7 +59,7 @@ class ViewerScreen extends ConsumerWidget {
       data: (files) {
         VaultFile? file;
         for (final f in files) {
-          if (f.id == fileId) {
+          if (f.id == widget.fileId) {
             file = f;
             break;
           }
@@ -37,8 +69,8 @@ class ViewerScreen extends ConsumerWidget {
         }
         return switch (file.category) {
           FileCategory.image => ImageViewerScreen(file: file),
-          FileCategory.video => VideoPlayerScreen(file: file),
-          FileCategory.audio => AudioPlayerScreen(file: file),
+          FileCategory.video => VideoPlayerScreen(file: file, queue: _buildQueue(file, files)),
+          FileCategory.audio => AudioPlayerScreen(file: file, queue: _buildQueue(file, files)),
           FileCategory.pdf => PdfViewerScreen(file: file),
           FileCategory.generic => GenericFileScreen(file: file),
         };

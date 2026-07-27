@@ -24,3 +24,10 @@ class IntegrityException extends VaultException {
 class AuthException extends VaultException {
   const AuthException(super.message);
 }
+
+/// Raised when a long-running operation (currently an import) is aborted by
+/// the user partway through. Callers treat this as a clean cancellation —
+/// roll back partial state — rather than a failure to report.
+class CancelledException extends VaultException {
+  const CancelledException([super.message = 'Operación cancelada.']);
+}

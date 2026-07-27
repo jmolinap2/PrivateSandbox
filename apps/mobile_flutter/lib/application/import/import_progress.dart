@@ -1,4 +1,4 @@
-enum ImportStage { encrypting, verifying, savingMetadata, done, failed }
+enum ImportStage { encrypting, verifying, savingMetadata, done, failed, cancelled }
 
 class ImportProgress {
   final ImportStage stage;

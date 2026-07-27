@@ -7,10 +7,9 @@ import '../../application/auth/lock_state.dart';
 import '../screens/auth/pin_setup_screen.dart';
 import '../screens/auth/pin_unlock_screen.dart';
 import '../screens/auth/splash_screen.dart';
-import '../screens/gallery/gallery_screen.dart';
-import '../screens/settings/settings_screen.dart';
 import '../screens/viewer/viewer_screen.dart';
 import 'app_routes.dart';
+import 'app_shell.dart';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = ValueNotifier(ref.read(authControllerProvider));
@@ -49,11 +48,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.splash, builder: (context, state) => const SplashScreen()),
       GoRoute(path: AppRoutes.pinSetup, builder: (context, state) => const PinSetupScreen()),
       GoRoute(path: AppRoutes.pinUnlock, builder: (context, state) => const PinUnlockScreen()),
-      GoRoute(path: AppRoutes.gallery, builder: (context, state) => const GalleryScreen()),
-      GoRoute(path: AppRoutes.settings, builder: (context, state) => const SettingsScreen()),
+      GoRoute(path: AppRoutes.gallery, builder: (context, state) => const AppShell()),
       GoRoute(
         path: '${AppRoutes.viewer}/:id',
-        builder: (context, state) => ViewerScreen(fileId: state.pathParameters['id']!),
+        // `extra` carries the ordered ids of the list the file was opened from,
+        // so video/audio players can use them as a playback queue.
+        builder: (context, state) => ViewerScreen(
+          fileId: state.pathParameters['id']!,
+          queueIds: state.extra is List<String> ? state.extra as List<String> : null,
+        ),
       ),
     ],
   );

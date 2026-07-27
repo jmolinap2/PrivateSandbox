@@ -1,21 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/entities/file_category.dart';
 import '../../domain/entities/vault_file.dart';
+import 'vault_thumbnail.dart';
 
 class VaultFileTile extends StatelessWidget {
   final VaultFile file;
   final VoidCallback onTap;
 
   const VaultFileTile({super.key, required this.file, required this.onTap});
-
-  IconData get _icon => switch (file.category) {
-        FileCategory.image => Icons.image_outlined,
-        FileCategory.video => Icons.movie_outlined,
-        FileCategory.audio => Icons.audiotrack_outlined,
-        FileCategory.pdf => Icons.picture_as_pdf_outlined,
-        FileCategory.generic => Icons.insert_drive_file_outlined,
-      };
 
   String get _sizeLabel {
     final kb = file.sizeBytes / 1024;
@@ -39,8 +31,16 @@ class VaultFileTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Center(
-                  child: Icon(_icon, size: 40, color: theme.colorScheme.primary),
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: VaultThumbnail(file: file)),
+                    if (file.isFavorite)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Icon(Icons.star, size: 16, color: theme.colorScheme.primary),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),

@@ -41,6 +41,12 @@ kotlin {
     }
 }
 
+dependencies {
+    // DocumentFile: used to recreate a file inside a granted SAF folder tree
+    // when restoring an explorer-imported file whose original was deleted.
+    implementation("androidx.documentfile:documentfile:1.1.0")
+}
+
 flutter {
     source = "../.."
 }

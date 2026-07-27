@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the vault_share subfolder of the app cache is ever exposed through
+     the FileProvider, and only for files the user explicitly chose to share.
+     getTemporaryDirectory() (path_provider) resolves to getCacheDir(), so a
+     <cache-path> covers the decrypted temp files written there. -->
+<paths>
+    <cache-path name="vault_share" path="vault_share/" />
+</paths>

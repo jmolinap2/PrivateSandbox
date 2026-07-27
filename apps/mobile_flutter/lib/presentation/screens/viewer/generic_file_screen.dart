@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/entities/vault_file.dart';
-import 'export_action.dart';
+import 'restore_action.dart';
+import 'share_action.dart';
 
 /// Files without a dedicated in-app viewer (Phase 1 only ships viewers for
 /// images/video/audio/PDF) still get imported, hidden and exported — they
@@ -39,9 +40,15 @@ class GenericFileScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
               FilledButton.icon(
-                onPressed: () => exportVaultFile(context, ref, file),
+                onPressed: () => restoreVaultFile(context, ref, file),
                 icon: const Icon(Icons.file_download_outlined),
                 label: const Text('Exportar'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => shareVaultFile(context, ref, file),
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('Compartir'),
               ),
             ],
           ),

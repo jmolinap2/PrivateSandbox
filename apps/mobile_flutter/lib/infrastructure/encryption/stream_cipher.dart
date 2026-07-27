@@ -5,6 +5,8 @@ import 'package:async/async.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 
+import '../../shared/errors/vault_exceptions.dart';
+
 /// Chunked AES-256-GCM encryption/decryption so a file is never fully
 /// buffered in memory, as required by the plan ("cifrado por streaming").
 ///
@@ -24,11 +26,18 @@ class StreamCipher {
 
   /// Encrypts [input] into [output] and returns the SHA-256 hex digest of
   /// the original plaintext, computed in the same pass.
+  ///
+  /// [isCancelled] is polled once per chunk; if it ever returns true the
+  /// encryption stops and throws [CancelledException]. The caller is
+  /// responsible for deleting the (partial) [output]. Checking on chunk
+  /// boundaries keeps a cancel responsive without leaving a half-written
+  /// ciphertext chunk.
   static Future<String> encryptFile({
     required File input,
     required File output,
     required SecretKey fileKey,
     required Uint8List noncePrefix,
+    bool Function()? isCancelled,
   }) async {
     final reader = ChunkedStreamReader<int>(input.openRead());
     final sink = output.openWrite();
@@ -37,6 +46,9 @@ class StreamCipher {
     try {
       var counter = 0;
       while (true) {
+        if (isCancelled != null && isCancelled()) {
+          throw const CancelledException();
+        }
         final chunk = await reader.readChunk(chunkSize);
         if (chunk.isEmpty) break;
         hashConversion.add(chunk);

@@ -1,10 +1,10 @@
 import 'package:drift/drift.dart';
 
-import '../../domain/entities/file_category.dart';
 import '../../domain/entities/import_status.dart';
 import '../../domain/entities/vault_file.dart';
 import '../../domain/repositories/vault_repository.dart';
 import 'app_database.dart';
+import 'vault_file_mapper.dart';
 
 class VaultRepositoryImpl implements VaultRepository {
   final AppDatabase _db;
@@ -14,21 +14,42 @@ class VaultRepositoryImpl implements VaultRepository {
   @override
   Stream<List<VaultFile>> watchFiles() {
     final query = _db.select(_db.vaultFiles)
-      ..where((t) => t.status.equals(ImportStatus.completed.name))
+      ..where((t) => t.status.equals(ImportStatus.completed.name) & t.deletedAt.isNull())
       ..orderBy([(t) => OrderingTerm.desc(t.importedAt)]);
-    return query.watch().map((rows) => rows.map(_toEntity).toList());
+    return query.watch().map((rows) => rows.map(mapVaultFileRow).toList());
+  }
+
+  @override
+  Stream<List<VaultFile>> watchTrashedFiles() {
+    final query = _db.select(_db.vaultFiles)
+      ..where((t) => t.status.equals(ImportStatus.completed.name) & t.deletedAt.isNotNull())
+      ..orderBy([(t) => OrderingTerm.desc(t.deletedAt)]);
+    return query.watch().map((rows) => rows.map(mapVaultFileRow).toList());
+  }
+
+  @override
+  Stream<List<VaultFile>> watchFilesInFolder(String? folderId) {
+    final query = _db.select(_db.vaultFiles)
+      ..where(
+        (t) =>
+            t.status.equals(ImportStatus.completed.name) &
+            t.deletedAt.isNull() &
+            (folderId == null ? t.folderId.isNull() : t.folderId.equals(folderId)),
+      )
+      ..orderBy([(t) => OrderingTerm.desc(t.importedAt)]);
+    return query.watch().map((rows) => rows.map(mapVaultFileRow).toList());
   }
 
   @override
   Future<VaultFile?> getById(String id) async {
     final row = await (_db.select(_db.vaultFiles)..where((t) => t.id.equals(id))).getSingleOrNull();
-    return row == null ? null : _toEntity(row);
+    return row == null ? null : mapVaultFileRow(row);
   }
 
   @override
   Future<List<VaultFile>> getInterruptedImports() async {
     final rows = await (_db.select(_db.vaultFiles)..where((t) => t.status.equals(ImportStatus.importing.name))).get();
-    return rows.map(_toEntity).toList();
+    return rows.map(mapVaultFileRow).toList();
   }
 
   @override
@@ -56,23 +77,51 @@ class VaultRepositoryImpl implements VaultRepository {
     return (_db.delete(_db.vaultFiles)..where((t) => t.id.equals(id))).go();
   }
 
-  VaultFile _toEntity(VaultFileRow row) {
-    return VaultFile(
-      id: row.id,
-      originalName: row.originalName,
-      extension: row.extension,
-      mimeType: row.mimeType,
-      sizeBytes: row.sizeBytes,
-      originalPath: row.originalPath,
-      importedAt: row.importedAt,
-      fileModifiedAt: row.fileModifiedAt,
-      category: FileCategory.values.byName(row.category),
-      status: ImportStatus.values.byName(row.status),
-      encryptedFileName: row.encryptedFileName,
-      fileSaltBase64: row.fileSaltBase64,
-      noncePrefixBase64: row.noncePrefixBase64,
-      sha256Hash: row.sha256Hash,
-      originalDeleted: row.originalDeleted,
+  @override
+  Future<void> moveToTrash(String id) {
+    return (_db.update(_db.vaultFiles)..where((t) => t.id.equals(id))).write(
+      VaultFilesCompanion(deletedAt: Value(DateTime.now())),
+    );
+  }
+
+  @override
+  Future<void> restoreFromTrash(String id) {
+    return (_db.update(_db.vaultFiles)..where((t) => t.id.equals(id))).write(
+      const VaultFilesCompanion(deletedAt: Value(null)),
+    );
+  }
+
+  @override
+  Future<void> moveFileToFolder(String id, String? folderId) {
+    return (_db.update(_db.vaultFiles)..where((t) => t.id.equals(id))).write(
+      VaultFilesCompanion(folderId: Value(folderId)),
+    );
+  }
+
+  @override
+  Future<void> setFavorite(String id, bool isFavorite) {
+    return (_db.update(_db.vaultFiles)..where((t) => t.id.equals(id))).write(
+      VaultFilesCompanion(isFavorite: Value(isFavorite)),
+    );
+  }
+
+  @override
+  Future<void> recordOpened(String id, {int? playbackPositionMs}) {
+    return (_db.update(_db.vaultFiles)..where((t) => t.id.equals(id))).write(
+      VaultFilesCompanion(
+        lastOpenedAt: Value(DateTime.now()),
+        playbackPositionMs: playbackPositionMs == null ? const Value.absent() : Value(playbackPositionMs),
+      ),
+    );
+  }
+
+  @override
+  Future<void> setThumbnail(String id, {required String fileName, required String noncePrefixBase64}) {
+    return (_db.update(_db.vaultFiles)..where((t) => t.id.equals(id))).write(
+      VaultFilesCompanion(
+        thumbnailFileName: Value(fileName),
+        thumbnailNoncePrefixBase64: Value(noncePrefixBase64),
+      ),
     );
   }
 
@@ -84,6 +133,10 @@ class VaultRepositoryImpl implements VaultRepository {
       mimeType: file.mimeType,
       sizeBytes: file.sizeBytes,
       originalPath: Value(file.originalPath),
+      originalContentUri: Value(file.originalContentUri),
+      originalRelativePath: Value(file.originalRelativePath),
+      originalTreeUri: Value(file.originalTreeUri),
+      originalTreeRelativePath: Value(file.originalTreeRelativePath),
       importedAt: file.importedAt,
       fileModifiedAt: Value(file.fileModifiedAt),
       category: file.category.name,
