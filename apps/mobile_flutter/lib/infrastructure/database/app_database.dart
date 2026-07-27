@@ -10,6 +10,7 @@ import 'tables/vault_collections_table.dart';
 import 'tables/vault_files_table.dart';
 import 'tables/vault_folders_table.dart';
 import 'tables/vault_smart_albums_table.dart';
+import 'tables/vault_sync_states_table.dart';
 import 'tables/vault_tags_table.dart';
 
 part 'app_database.g.dart';
@@ -23,13 +24,14 @@ part 'app_database.g.dart';
   VaultCollections,
   VaultCollectionFiles,
   VaultSmartAlbums,
+  VaultSyncStates,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
   AppDatabase.withExecutor(super.executor);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -67,6 +69,25 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(vaultFiles, vaultFiles.originalTreeUri);
             await m.addColumn(vaultFiles, vaultFiles.originalTreeRelativePath);
           }
+          if (from < 9) {
+            await m.addColumn(vaultFiles, vaultFiles.originalCreatedAt);
+            await m.addColumn(vaultFiles, vaultFiles.originalAccessedAt);
+            await m.addColumn(vaultFiles, vaultFiles.originalMetadataJson);
+          }
+          if (from < 10) {
+            await m.createTable(vaultSyncStates);
+          }
+        },
+        beforeOpen: (_) async {
+          // Make durability explicit for a vault: WAL handles concurrent
+          // readers, FULL asks SQLite to fsync commits before acknowledging
+          // them, and secure_delete prevents sensitive metadata from lingering
+          // in free database pages after records are removed.
+          await customStatement('PRAGMA foreign_keys = ON;');
+          await customStatement('PRAGMA journal_mode = WAL;');
+          await customStatement('PRAGMA synchronous = FULL;');
+          await customStatement('PRAGMA secure_delete = ON;');
+          await customStatement('PRAGMA busy_timeout = 5000;');
         },
       );
 

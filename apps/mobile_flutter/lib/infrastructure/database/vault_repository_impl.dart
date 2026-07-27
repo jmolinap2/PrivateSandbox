@@ -47,14 +47,35 @@ class VaultRepositoryImpl implements VaultRepository {
   }
 
   @override
+  Future<bool> hasStoredFiles() async {
+    final row = await (_db.select(_db.vaultFiles)..limit(1)).getSingleOrNull();
+    return row != null;
+  }
+
+  @override
   Future<List<VaultFile>> getInterruptedImports() async {
-    final rows = await (_db.select(_db.vaultFiles)..where((t) => t.status.equals(ImportStatus.importing.name))).get();
+    final rows = await (_db.select(_db.vaultFiles)
+          ..where((t) => t.status.isNotValue(ImportStatus.completed.name)))
+        .get();
     return rows.map(mapVaultFileRow).toList();
   }
 
   @override
   Future<void> insertFile(VaultFile file) {
     return _db.into(_db.vaultFiles).insert(_toCompanion(file));
+  }
+
+  @override
+  Future<void> markImportVerified({
+    required String id,
+    required String sha256Hash,
+  }) {
+    return (_db.update(_db.vaultFiles)..where((t) => t.id.equals(id))).write(
+      VaultFilesCompanion(
+        status: Value(ImportStatus.verified.name),
+        sha256Hash: Value(sha256Hash),
+      ),
+    );
   }
 
   @override
@@ -74,7 +95,11 @@ class VaultRepositoryImpl implements VaultRepository {
 
   @override
   Future<void> deleteFile(String id) {
-    return (_db.delete(_db.vaultFiles)..where((t) => t.id.equals(id))).go();
+    return _db.transaction(() async {
+      await (_db.delete(_db.vaultFileTags)..where((t) => t.fileId.equals(id))).go();
+      await (_db.delete(_db.vaultCollectionFiles)..where((t) => t.fileId.equals(id))).go();
+      await (_db.delete(_db.vaultFiles)..where((t) => t.id.equals(id))).go();
+    });
   }
 
   @override
@@ -139,6 +164,9 @@ class VaultRepositoryImpl implements VaultRepository {
       originalTreeRelativePath: Value(file.originalTreeRelativePath),
       importedAt: file.importedAt,
       fileModifiedAt: Value(file.fileModifiedAt),
+      originalCreatedAt: Value(file.originalCreatedAt),
+      originalAccessedAt: Value(file.originalAccessedAt),
+      originalMetadataJson: Value(file.originalMetadataJson),
       category: file.category.name,
       status: file.status.name,
       encryptedFileName: file.encryptedFileName,
@@ -146,6 +174,13 @@ class VaultRepositoryImpl implements VaultRepository {
       noncePrefixBase64: file.noncePrefixBase64,
       sha256Hash: Value(file.sha256Hash),
       originalDeleted: Value(file.originalDeleted),
+      isFavorite: Value(file.isFavorite),
+      lastOpenedAt: Value(file.lastOpenedAt),
+      playbackPositionMs: Value(file.playbackPositionMs),
+      thumbnailFileName: Value(file.thumbnailFileName),
+      thumbnailNoncePrefixBase64: Value(file.thumbnailNoncePrefixBase64),
+      deletedAt: Value(file.deletedAt),
+      folderId: Value(file.folderId),
     );
   }
 }

@@ -28,6 +28,7 @@ import '../infrastructure/encryption/key_manager.dart';
 import '../infrastructure/platform/original_location_channel.dart';
 import '../infrastructure/platform/system_channel.dart';
 import '../infrastructure/settings/import_preferences.dart';
+import '../infrastructure/synchronization/sync_configuration_store.dart';
 import '../media_engine/abstractions/audio_engine.dart';
 import '../media_engine/abstractions/video_engine.dart';
 import '../media_engine/media3/media3_audio_engine.dart';
@@ -39,6 +40,8 @@ import 'export/share_use_case.dart';
 import 'import/import_use_case.dart';
 import 'playback/playback_use_case.dart';
 import 'recovery/recovery_use_case.dart';
+import 'synchronization/configured_synchronization_service.dart';
+import 'synchronization/device_enrollment_service.dart';
 import 'thumbnails/thumbnail_use_case.dart';
 import 'vault/delete_file_use_case.dart';
 import 'vault/restore_use_case.dart';
@@ -71,11 +74,15 @@ final vaultTagRepositoryProvider = Provider<VaultTagRepository>((ref) {
   return VaultTagRepositoryImpl(ref.watch(appDatabaseProvider));
 });
 
-final vaultCollectionRepositoryProvider = Provider<VaultCollectionRepository>((ref) {
+final vaultCollectionRepositoryProvider = Provider<VaultCollectionRepository>((
+  ref,
+) {
   return VaultCollectionRepositoryImpl(ref.watch(appDatabaseProvider));
 });
 
-final vaultSmartAlbumRepositoryProvider = Provider<VaultSmartAlbumRepository>((ref) {
+final vaultSmartAlbumRepositoryProvider = Provider<VaultSmartAlbumRepository>((
+  ref,
+) {
   return VaultSmartAlbumRepositoryImpl(ref.watch(appDatabaseProvider));
 });
 
@@ -87,7 +94,9 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepositoryImpl(secureStorage: ref.watch(secureStorageProvider));
 });
 
-final originalLocationChannelProvider = Provider<OriginalLocationChannel>((ref) {
+final originalLocationChannelProvider = Provider<OriginalLocationChannel>((
+  ref,
+) {
   return OriginalLocationChannel();
 });
 
@@ -95,8 +104,34 @@ final importPreferencesProvider = Provider<ImportPreferences>((ref) {
   return ImportPreferences(ref.watch(secureStorageProvider));
 });
 
+final syncConfigurationStoreProvider = Provider<SyncConfigurationStore>((ref) {
+  return SyncConfigurationStore(ref.watch(secureStorageProvider));
+});
+
+final configuredSynchronizationServiceProvider =
+    Provider<ConfiguredSynchronizationService>((ref) {
+      return ConfiguredSynchronizationService(
+        database: ref.watch(appDatabaseProvider),
+        vaultRepository: ref.watch(vaultRepositoryProvider),
+        keyManager: ref.watch(keyManagerProvider),
+        secureStorage: ref.watch(secureStorageProvider),
+        configurationStore: ref.watch(syncConfigurationStoreProvider),
+      );
+    });
+
+final deviceEnrollmentServiceProvider = Provider<DeviceEnrollmentService>((
+  ref,
+) {
+  return DeviceEnrollmentService(
+    synchronization: ref.watch(configuredSynchronizationServiceProvider),
+  );
+});
+
 final thumbnailUseCaseProvider = Provider<ThumbnailUseCase>((ref) {
-  return ThumbnailUseCase(ref.watch(keyManagerProvider), ref.watch(originalLocationChannelProvider));
+  return ThumbnailUseCase(
+    ref.watch(keyManagerProvider),
+    ref.watch(originalLocationChannelProvider),
+  );
 });
 
 final importUseCaseProvider = Provider<ImportUseCase>((ref) {
@@ -110,7 +145,10 @@ final importUseCaseProvider = Provider<ImportUseCase>((ref) {
 });
 
 final exportUseCaseProvider = Provider<ExportUseCase>((ref) {
-  return ExportUseCase(ref.watch(keyManagerProvider), ref.watch(activityRepositoryProvider));
+  return ExportUseCase(
+    ref.watch(keyManagerProvider),
+    ref.watch(activityRepositoryProvider),
+  );
 });
 
 final systemChannelProvider = Provider<SystemChannel>((ref) {
@@ -135,22 +173,35 @@ final restoreUseCaseProvider = Provider<RestoreUseCase>((ref) {
 });
 
 final deleteFileUseCaseProvider = Provider<DeleteFileUseCase>((ref) {
-  return DeleteFileUseCase(ref.watch(vaultRepositoryProvider), ref.watch(activityRepositoryProvider));
+  return DeleteFileUseCase(
+    ref.watch(vaultRepositoryProvider),
+    ref.watch(activityRepositoryProvider),
+  );
 });
 
 final moveToTrashUseCaseProvider = Provider<MoveToTrashUseCase>((ref) {
-  return MoveToTrashUseCase(ref.watch(vaultRepositoryProvider), ref.watch(activityRepositoryProvider));
+  return MoveToTrashUseCase(
+    ref.watch(vaultRepositoryProvider),
+    ref.watch(activityRepositoryProvider),
+  );
 });
 
-final recoverFromTrashUseCaseProvider = Provider<RecoverFromTrashUseCase>((ref) {
-  return RecoverFromTrashUseCase(ref.watch(vaultRepositoryProvider), ref.watch(activityRepositoryProvider));
+final recoverFromTrashUseCaseProvider = Provider<RecoverFromTrashUseCase>((
+  ref,
+) {
+  return RecoverFromTrashUseCase(
+    ref.watch(vaultRepositoryProvider),
+    ref.watch(activityRepositoryProvider),
+  );
 });
 
 final verifyIntegrityUseCaseProvider = Provider<VerifyIntegrityUseCase>((ref) {
   return VerifyIntegrityUseCase(ref.watch(keyManagerProvider));
 });
 
-final exportVaultBackupUseCaseProvider = Provider<ExportVaultBackupUseCase>((ref) {
+final exportVaultBackupUseCaseProvider = Provider<ExportVaultBackupUseCase>((
+  ref,
+) {
   return ExportVaultBackupUseCase(
     ref.watch(appDatabaseProvider),
     ref.watch(keyManagerProvider),
@@ -158,8 +209,13 @@ final exportVaultBackupUseCaseProvider = Provider<ExportVaultBackupUseCase>((ref
   );
 });
 
-final importVaultBackupUseCaseProvider = Provider<ImportVaultBackupUseCase>((ref) {
-  return ImportVaultBackupUseCase(ref.watch(appDatabaseProvider), ref.watch(keyManagerProvider));
+final importVaultBackupUseCaseProvider = Provider<ImportVaultBackupUseCase>((
+  ref,
+) {
+  return ImportVaultBackupUseCase(
+    ref.watch(appDatabaseProvider),
+    ref.watch(keyManagerProvider),
+  );
 });
 
 final playbackUseCaseProvider = Provider<PlaybackUseCase>((ref) {
@@ -178,45 +234,60 @@ final vaultTrashedFilesStreamProvider = StreamProvider<List<VaultFile>>((ref) {
   return ref.watch(vaultRepositoryProvider).watchTrashedFiles();
 });
 
-final vaultFoldersStreamProvider = StreamProvider.family<List<VaultFolder>, String?>((ref, parentId) {
-  return ref.watch(vaultFolderRepositoryProvider).watchFolders(parentId);
-});
+final vaultFoldersStreamProvider =
+    StreamProvider.family<List<VaultFolder>, String?>((ref, parentId) {
+      return ref.watch(vaultFolderRepositoryProvider).watchFolders(parentId);
+    });
 
-final vaultFilesInFolderStreamProvider = StreamProvider.family<List<VaultFile>, String?>((ref, folderId) {
-  return ref.watch(vaultRepositoryProvider).watchFilesInFolder(folderId);
-});
+final vaultFilesInFolderStreamProvider =
+    StreamProvider.family<List<VaultFile>, String?>((ref, folderId) {
+      return ref.watch(vaultRepositoryProvider).watchFilesInFolder(folderId);
+    });
 
 final vaultTagsStreamProvider = StreamProvider<List<VaultTag>>((ref) {
   return ref.watch(vaultTagRepositoryProvider).watchTags();
 });
 
-final vaultTagsForFileStreamProvider = StreamProvider.family<List<VaultTag>, String>((ref, fileId) {
-  return ref.watch(vaultTagRepositoryProvider).watchTagsForFile(fileId);
-});
+final vaultTagsForFileStreamProvider =
+    StreamProvider.family<List<VaultTag>, String>((ref, fileId) {
+      return ref.watch(vaultTagRepositoryProvider).watchTagsForFile(fileId);
+    });
 
-final vaultFilesWithTagStreamProvider = StreamProvider.family<List<VaultFile>, String>((ref, tagId) {
-  return ref.watch(vaultTagRepositoryProvider).watchFilesWithTag(tagId);
-});
+final vaultFilesWithTagStreamProvider =
+    StreamProvider.family<List<VaultFile>, String>((ref, tagId) {
+      return ref.watch(vaultTagRepositoryProvider).watchFilesWithTag(tagId);
+    });
 
-final vaultCollectionsStreamProvider = StreamProvider<List<VaultCollection>>((ref) {
+final vaultCollectionsStreamProvider = StreamProvider<List<VaultCollection>>((
+  ref,
+) {
   return ref.watch(vaultCollectionRepositoryProvider).watchCollections();
 });
 
-final vaultCollectionsForFileStreamProvider = StreamProvider.family<List<VaultCollection>, String>((ref, fileId) {
-  return ref.watch(vaultCollectionRepositoryProvider).watchCollectionsForFile(fileId);
-});
+final vaultCollectionsForFileStreamProvider =
+    StreamProvider.family<List<VaultCollection>, String>((ref, fileId) {
+      return ref
+          .watch(vaultCollectionRepositoryProvider)
+          .watchCollectionsForFile(fileId);
+    });
 
-final vaultFilesInCollectionStreamProvider = StreamProvider.family<List<VaultFile>, String>((ref, collectionId) {
-  return ref.watch(vaultCollectionRepositoryProvider).watchFilesInCollection(collectionId);
-});
+final vaultFilesInCollectionStreamProvider =
+    StreamProvider.family<List<VaultFile>, String>((ref, collectionId) {
+      return ref
+          .watch(vaultCollectionRepositoryProvider)
+          .watchFilesInCollection(collectionId);
+    });
 
-final vaultSmartAlbumsStreamProvider = StreamProvider<List<VaultSmartAlbum>>((ref) {
+final vaultSmartAlbumsStreamProvider = StreamProvider<List<VaultSmartAlbum>>((
+  ref,
+) {
   return ref.watch(vaultSmartAlbumRepositoryProvider).watchSmartAlbums();
 });
 
-final vaultFilesForSmartAlbumStreamProvider = StreamProvider.family<List<VaultFile>, VaultSmartAlbum>((ref, album) {
-  return ref.watch(vaultSmartAlbumRepositoryProvider).watchFilesFor(album);
-});
+final vaultFilesForSmartAlbumStreamProvider =
+    StreamProvider.family<List<VaultFile>, VaultSmartAlbum>((ref, album) {
+      return ref.watch(vaultSmartAlbumRepositoryProvider).watchFilesFor(album);
+    });
 
 final activityEventsStreamProvider = StreamProvider<List<ActivityEvent>>((ref) {
   return ref.watch(activityRepositoryProvider).watchEvents();
@@ -227,30 +298,45 @@ final activityEventsStreamProvider = StreamProvider<List<ActivityEvent>>((ref) {
 /// rather than a dedicated query, since every active file is already
 /// loaded there for the library.
 final duplicateFileGroupsProvider = Provider<List<List<VaultFile>>>((ref) {
-  final files = ref.watch(vaultFilesStreamProvider).value ?? const <VaultFile>[];
+  final files =
+      ref.watch(vaultFilesStreamProvider).value ?? const <VaultFile>[];
   final byHash = <String, List<VaultFile>>{};
   for (final file in files) {
     if (file.sha256Hash.isEmpty) continue;
     byHash.putIfAbsent(file.sha256Hash, () => []).add(file);
   }
-  return [for (final group in byHash.values) if (group.length > 1) group];
+  return [
+    for (final group in byHash.values)
+      if (group.length > 1) group,
+  ];
 });
 
 /// Engine factories, not singletons — each viewer session needs its own
 /// instance. The concrete implementation (Media3 today) is the only place
 /// that knows which package backs it; swapping to libVLC later only means
 /// changing these two lines.
-final videoEngineFactoryProvider = Provider<VideoEngine Function()>((ref) => Media3VideoEngine.new);
-final audioEngineFactoryProvider = Provider<AudioEngine Function()>((ref) => Media3AudioEngine.new);
+final videoEngineFactoryProvider = Provider<VideoEngine Function()>(
+  (ref) => Media3VideoEngine.new,
+);
+final audioEngineFactoryProvider = Provider<AudioEngine Function()>(
+  (ref) => Media3AudioEngine.new,
+);
 
-typedef ThumbnailKey = ({String fileSaltBase64, String thumbnailFileName, String thumbnailNoncePrefixBase64});
+typedef ThumbnailKey = ({
+  String fileSaltBase64,
+  String thumbnailFileName,
+  String thumbnailNoncePrefixBase64,
+});
 
 /// Cached (per key) decrypted thumbnail bytes, so scrolling a list doesn't
 /// re-decrypt the same thumbnail on every rebuild.
-final thumbnailBytesProvider = FutureProvider.autoDispose.family<Uint8List?, ThumbnailKey>((ref, key) {
-  return ref.watch(thumbnailUseCaseProvider).loadDecrypted(
-        fileSaltBase64: key.fileSaltBase64,
-        thumbnailFileName: key.thumbnailFileName,
-        thumbnailNoncePrefixBase64: key.thumbnailNoncePrefixBase64,
-      );
-});
+final thumbnailBytesProvider = FutureProvider.autoDispose
+    .family<Uint8List?, ThumbnailKey>((ref, key) {
+      return ref
+          .watch(thumbnailUseCaseProvider)
+          .loadDecrypted(
+            fileSaltBase64: key.fileSaltBase64,
+            thumbnailFileName: key.thumbnailFileName,
+            thumbnailNoncePrefixBase64: key.thumbnailNoncePrefixBase64,
+          );
+    });

@@ -30,6 +30,9 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<bool> verifyPin(String pin) => _pinStorage.verifyPin(pin);
 
   @override
+  Future<Duration?> getPinRetryDelay() => _pinStorage.getRetryDelay();
+
+  @override
   Future<bool> isBiometricAvailable() => _biometricService.isAvailable();
 
   @override

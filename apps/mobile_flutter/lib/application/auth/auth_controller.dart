@@ -25,6 +25,7 @@ class AuthController extends Notifier<LockState> {
 
   Future<void> setupPin(String pin) async {
     await ref.read(authRepositoryProvider).setPin(pin);
+    await ref.read(keyManagerProvider).getOrCreateMasterKey();
     await ref.read(recoveryUseCaseProvider).recoverInterruptedImports();
     state = LockState.unlocked;
   }
@@ -32,7 +33,7 @@ class AuthController extends Notifier<LockState> {
   Future<bool> unlockWithPin(String pin) async {
     final ok = await ref.read(authRepositoryProvider).verifyPin(pin);
     if (ok) {
-      await ref.read(recoveryUseCaseProvider).recoverInterruptedImports();
+      await _prepareVaultAfterAuthentication();
       state = LockState.unlocked;
     } else {
       await _logAccessDenied('PIN incorrecto');
@@ -47,12 +48,23 @@ class AuthController extends Notifier<LockState> {
     }
     final ok = await authRepo.authenticateWithBiometrics();
     if (ok) {
-      await ref.read(recoveryUseCaseProvider).recoverInterruptedImports();
+      await _prepareVaultAfterAuthentication();
       state = LockState.unlocked;
     } else {
       await _logAccessDenied('Biometría fallida o cancelada');
     }
     return ok;
+  }
+
+  Future<void> _prepareVaultAfterAuthentication() async {
+    final vaultRepository = ref.read(vaultRepositoryProvider);
+    final keyManager = ref.read(keyManagerProvider);
+    if (await vaultRepository.hasStoredFiles()) {
+      await keyManager.getExistingMasterKey();
+    } else {
+      await keyManager.getOrCreateMasterKey();
+    }
+    await ref.read(recoveryUseCaseProvider).recoverInterruptedImports();
   }
 
   Future<void> _logAccessDenied(String reason) {

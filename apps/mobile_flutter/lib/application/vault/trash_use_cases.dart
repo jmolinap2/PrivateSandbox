@@ -18,14 +18,20 @@ class MoveToTrashUseCase {
 
   Future<void> call(VaultFile file) async {
     await _vaultRepository.moveToTrash(file.id);
-    await _activityRepository.logEvent(ActivityEvent(
-      id: _uuid.v4(),
-      type: ActivityEventType.deleted,
-      fileName: file.originalName,
-      timestamp: DateTime.now(),
-      success: true,
-      detail: 'Movido a la papelera',
-    ));
+    try {
+      await _activityRepository.logEvent(
+        ActivityEvent(
+          id: _uuid.v4(),
+          type: ActivityEventType.deleted,
+          fileName: file.originalName,
+          timestamp: DateTime.now(),
+          success: true,
+          detail: 'Movido a la papelera',
+        ),
+      );
+    } catch (_) {
+      // The trash transition already committed.
+    }
   }
 }
 
@@ -42,13 +48,19 @@ class RecoverFromTrashUseCase {
 
   Future<void> call(VaultFile file) async {
     await _vaultRepository.restoreFromTrash(file.id);
-    await _activityRepository.logEvent(ActivityEvent(
-      id: _uuid.v4(),
-      type: ActivityEventType.imported,
-      fileName: file.originalName,
-      timestamp: DateTime.now(),
-      success: true,
-      detail: 'Recuperado de la papelera',
-    ));
+    try {
+      await _activityRepository.logEvent(
+        ActivityEvent(
+          id: _uuid.v4(),
+          type: ActivityEventType.imported,
+          fileName: file.originalName,
+          timestamp: DateTime.now(),
+          success: true,
+          detail: 'Recuperado de la papelera',
+        ),
+      );
+    } catch (_) {
+      // The recovery transition already committed.
+    }
   }
 }

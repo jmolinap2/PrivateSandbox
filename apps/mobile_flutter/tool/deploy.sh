@@ -29,6 +29,15 @@ echo "==> adb connect $DEVICE"
 echo "==> adb install -r"
 "$ADB" -s "$DEVICE" install -r "$APK"
 
+PHONE_DIR="$(dirname "$PHONE_DEST")"
+PHONE_BACKUP_DIR="$PHONE_DIR/respaldo"
+if "$ADB" -s "$DEVICE" shell test -f "$PHONE_DEST"; then
+  BACKUP_NAME="$(basename "$PHONE_DEST" .apk)-$(date +%Y%m%d-%H%M%S).apk"
+  echo "==> Respaldando la APK anterior del teléfono: $BACKUP_NAME"
+  "$ADB" -s "$DEVICE" shell mkdir -p "$PHONE_BACKUP_DIR"
+  "$ADB" -s "$DEVICE" shell mv "$PHONE_DEST" "$PHONE_BACKUP_DIR/$BACKUP_NAME"
+fi
+
 echo "==> adb push -> $PHONE_DEST"
 "$ADB" -s "$DEVICE" push "$APK" "$PHONE_DEST"
 

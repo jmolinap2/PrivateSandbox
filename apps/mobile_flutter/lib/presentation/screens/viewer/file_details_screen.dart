@@ -81,6 +81,18 @@ class FileDetailsScreen extends ConsumerWidget {
             'Modificado (original)',
             file.fileModifiedAt == null ? 'Desconocido' : dateFormat.format(file.fileModifiedAt!),
           ),
+          _Row(
+            'Creado (original)',
+            file.originalCreatedAt == null
+                ? 'No disponible'
+                : dateFormat.format(file.originalCreatedAt!),
+          ),
+          _Row(
+            'Accedido (original)',
+            file.originalAccessedAt == null
+                ? 'No disponible'
+                : dateFormat.format(file.originalAccessedAt!),
+          ),
           _Section(title: 'Integridad'),
           _Row('SHA-256', file.sha256Hash, selectable: true),
           Padding(
@@ -94,6 +106,12 @@ class FileDetailsScreen extends ConsumerWidget {
           _Section(title: 'Origen'),
           _Row('Original eliminado del dispositivo', file.originalDeleted ? 'Sí' : 'No'),
           _OriginRow(file: file),
+          if (file.originalMetadataJson != null)
+            _Row(
+              'Metadata conservada',
+              file.originalMetadataJson!,
+              selectable: true,
+            ),
           if (folderId != null) _FolderRow(folderId: folderId),
           _Section(title: 'Etiquetas'),
           tagsAsync.when(

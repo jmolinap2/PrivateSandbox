@@ -140,6 +140,40 @@ class $VaultFilesTable extends VaultFiles
         type: DriftSqlType.dateTime,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _originalCreatedAtMeta = const VerificationMeta(
+    'originalCreatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> originalCreatedAt =
+      GeneratedColumn<DateTime>(
+        'original_created_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _originalAccessedAtMeta =
+      const VerificationMeta('originalAccessedAt');
+  @override
+  late final GeneratedColumn<DateTime> originalAccessedAt =
+      GeneratedColumn<DateTime>(
+        'original_accessed_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _originalMetadataJsonMeta =
+      const VerificationMeta('originalMetadataJson');
+  @override
+  late final GeneratedColumn<String> originalMetadataJson =
+      GeneratedColumn<String>(
+        'original_metadata_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _categoryMeta = const VerificationMeta(
     'category',
   );
@@ -317,6 +351,9 @@ class $VaultFilesTable extends VaultFiles
     originalTreeRelativePath,
     importedAt,
     fileModifiedAt,
+    originalCreatedAt,
+    originalAccessedAt,
+    originalMetadataJson,
     category,
     status,
     encryptedFileName,
@@ -443,6 +480,33 @@ class $VaultFilesTable extends VaultFiles
         fileModifiedAt.isAcceptableOrUnknown(
           data['file_modified_at']!,
           _fileModifiedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('original_created_at')) {
+      context.handle(
+        _originalCreatedAtMeta,
+        originalCreatedAt.isAcceptableOrUnknown(
+          data['original_created_at']!,
+          _originalCreatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('original_accessed_at')) {
+      context.handle(
+        _originalAccessedAtMeta,
+        originalAccessedAt.isAcceptableOrUnknown(
+          data['original_accessed_at']!,
+          _originalAccessedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('original_metadata_json')) {
+      context.handle(
+        _originalMetadataJsonMeta,
+        originalMetadataJson.isAcceptableOrUnknown(
+          data['original_metadata_json']!,
+          _originalMetadataJsonMeta,
         ),
       );
     }
@@ -621,6 +685,18 @@ class $VaultFilesTable extends VaultFiles
         DriftSqlType.dateTime,
         data['${effectivePrefix}file_modified_at'],
       ),
+      originalCreatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}original_created_at'],
+      ),
+      originalAccessedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}original_accessed_at'],
+      ),
+      originalMetadataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}original_metadata_json'],
+      ),
       category: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}category'],
@@ -707,6 +783,9 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
   final String? originalTreeRelativePath;
   final DateTime importedAt;
   final DateTime? fileModifiedAt;
+  final DateTime? originalCreatedAt;
+  final DateTime? originalAccessedAt;
+  final String? originalMetadataJson;
   final String category;
   final String status;
   final String encryptedFileName;
@@ -741,6 +820,9 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
     this.originalTreeRelativePath,
     required this.importedAt,
     this.fileModifiedAt,
+    this.originalCreatedAt,
+    this.originalAccessedAt,
+    this.originalMetadataJson,
     required this.category,
     required this.status,
     required this.encryptedFileName,
@@ -784,6 +866,15 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
     map['imported_at'] = Variable<DateTime>(importedAt);
     if (!nullToAbsent || fileModifiedAt != null) {
       map['file_modified_at'] = Variable<DateTime>(fileModifiedAt);
+    }
+    if (!nullToAbsent || originalCreatedAt != null) {
+      map['original_created_at'] = Variable<DateTime>(originalCreatedAt);
+    }
+    if (!nullToAbsent || originalAccessedAt != null) {
+      map['original_accessed_at'] = Variable<DateTime>(originalAccessedAt);
+    }
+    if (!nullToAbsent || originalMetadataJson != null) {
+      map['original_metadata_json'] = Variable<String>(originalMetadataJson);
     }
     map['category'] = Variable<String>(category);
     map['status'] = Variable<String>(status);
@@ -842,6 +933,15 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
       fileModifiedAt: fileModifiedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(fileModifiedAt),
+      originalCreatedAt: originalCreatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalCreatedAt),
+      originalAccessedAt: originalAccessedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalAccessedAt),
+      originalMetadataJson: originalMetadataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalMetadataJson),
       category: Value(category),
       status: Value(status),
       encryptedFileName: Value(encryptedFileName),
@@ -896,6 +996,15 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
       ),
       importedAt: serializer.fromJson<DateTime>(json['importedAt']),
       fileModifiedAt: serializer.fromJson<DateTime?>(json['fileModifiedAt']),
+      originalCreatedAt: serializer.fromJson<DateTime?>(
+        json['originalCreatedAt'],
+      ),
+      originalAccessedAt: serializer.fromJson<DateTime?>(
+        json['originalAccessedAt'],
+      ),
+      originalMetadataJson: serializer.fromJson<String?>(
+        json['originalMetadataJson'],
+      ),
       category: serializer.fromJson<String>(json['category']),
       status: serializer.fromJson<String>(json['status']),
       encryptedFileName: serializer.fromJson<String>(json['encryptedFileName']),
@@ -934,6 +1043,9 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
       ),
       'importedAt': serializer.toJson<DateTime>(importedAt),
       'fileModifiedAt': serializer.toJson<DateTime?>(fileModifiedAt),
+      'originalCreatedAt': serializer.toJson<DateTime?>(originalCreatedAt),
+      'originalAccessedAt': serializer.toJson<DateTime?>(originalAccessedAt),
+      'originalMetadataJson': serializer.toJson<String?>(originalMetadataJson),
       'category': serializer.toJson<String>(category),
       'status': serializer.toJson<String>(status),
       'encryptedFileName': serializer.toJson<String>(encryptedFileName),
@@ -966,6 +1078,9 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
     Value<String?> originalTreeRelativePath = const Value.absent(),
     DateTime? importedAt,
     Value<DateTime?> fileModifiedAt = const Value.absent(),
+    Value<DateTime?> originalCreatedAt = const Value.absent(),
+    Value<DateTime?> originalAccessedAt = const Value.absent(),
+    Value<String?> originalMetadataJson = const Value.absent(),
     String? category,
     String? status,
     String? encryptedFileName,
@@ -1003,6 +1118,15 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
     fileModifiedAt: fileModifiedAt.present
         ? fileModifiedAt.value
         : this.fileModifiedAt,
+    originalCreatedAt: originalCreatedAt.present
+        ? originalCreatedAt.value
+        : this.originalCreatedAt,
+    originalAccessedAt: originalAccessedAt.present
+        ? originalAccessedAt.value
+        : this.originalAccessedAt,
+    originalMetadataJson: originalMetadataJson.present
+        ? originalMetadataJson.value
+        : this.originalMetadataJson,
     category: category ?? this.category,
     status: status ?? this.status,
     encryptedFileName: encryptedFileName ?? this.encryptedFileName,
@@ -1054,6 +1178,15 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
       fileModifiedAt: data.fileModifiedAt.present
           ? data.fileModifiedAt.value
           : this.fileModifiedAt,
+      originalCreatedAt: data.originalCreatedAt.present
+          ? data.originalCreatedAt.value
+          : this.originalCreatedAt,
+      originalAccessedAt: data.originalAccessedAt.present
+          ? data.originalAccessedAt.value
+          : this.originalAccessedAt,
+      originalMetadataJson: data.originalMetadataJson.present
+          ? data.originalMetadataJson.value
+          : this.originalMetadataJson,
       category: data.category.present ? data.category.value : this.category,
       status: data.status.present ? data.status.value : this.status,
       encryptedFileName: data.encryptedFileName.present
@@ -1106,6 +1239,9 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
           ..write('originalTreeRelativePath: $originalTreeRelativePath, ')
           ..write('importedAt: $importedAt, ')
           ..write('fileModifiedAt: $fileModifiedAt, ')
+          ..write('originalCreatedAt: $originalCreatedAt, ')
+          ..write('originalAccessedAt: $originalAccessedAt, ')
+          ..write('originalMetadataJson: $originalMetadataJson, ')
           ..write('category: $category, ')
           ..write('status: $status, ')
           ..write('encryptedFileName: $encryptedFileName, ')
@@ -1138,6 +1274,9 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
     originalTreeRelativePath,
     importedAt,
     fileModifiedAt,
+    originalCreatedAt,
+    originalAccessedAt,
+    originalMetadataJson,
     category,
     status,
     encryptedFileName,
@@ -1169,6 +1308,9 @@ class VaultFileRow extends DataClass implements Insertable<VaultFileRow> {
           other.originalTreeRelativePath == this.originalTreeRelativePath &&
           other.importedAt == this.importedAt &&
           other.fileModifiedAt == this.fileModifiedAt &&
+          other.originalCreatedAt == this.originalCreatedAt &&
+          other.originalAccessedAt == this.originalAccessedAt &&
+          other.originalMetadataJson == this.originalMetadataJson &&
           other.category == this.category &&
           other.status == this.status &&
           other.encryptedFileName == this.encryptedFileName &&
@@ -1198,6 +1340,9 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
   final Value<String?> originalTreeRelativePath;
   final Value<DateTime> importedAt;
   final Value<DateTime?> fileModifiedAt;
+  final Value<DateTime?> originalCreatedAt;
+  final Value<DateTime?> originalAccessedAt;
+  final Value<String?> originalMetadataJson;
   final Value<String> category;
   final Value<String> status;
   final Value<String> encryptedFileName;
@@ -1226,6 +1371,9 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
     this.originalTreeRelativePath = const Value.absent(),
     this.importedAt = const Value.absent(),
     this.fileModifiedAt = const Value.absent(),
+    this.originalCreatedAt = const Value.absent(),
+    this.originalAccessedAt = const Value.absent(),
+    this.originalMetadataJson = const Value.absent(),
     this.category = const Value.absent(),
     this.status = const Value.absent(),
     this.encryptedFileName = const Value.absent(),
@@ -1255,6 +1403,9 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
     this.originalTreeRelativePath = const Value.absent(),
     required DateTime importedAt,
     this.fileModifiedAt = const Value.absent(),
+    this.originalCreatedAt = const Value.absent(),
+    this.originalAccessedAt = const Value.absent(),
+    this.originalMetadataJson = const Value.absent(),
     required String category,
     required String status,
     required String encryptedFileName,
@@ -1294,6 +1445,9 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
     Expression<String>? originalTreeRelativePath,
     Expression<DateTime>? importedAt,
     Expression<DateTime>? fileModifiedAt,
+    Expression<DateTime>? originalCreatedAt,
+    Expression<DateTime>? originalAccessedAt,
+    Expression<String>? originalMetadataJson,
     Expression<String>? category,
     Expression<String>? status,
     Expression<String>? encryptedFileName,
@@ -1326,6 +1480,11 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
         'original_tree_relative_path': originalTreeRelativePath,
       if (importedAt != null) 'imported_at': importedAt,
       if (fileModifiedAt != null) 'file_modified_at': fileModifiedAt,
+      if (originalCreatedAt != null) 'original_created_at': originalCreatedAt,
+      if (originalAccessedAt != null)
+        'original_accessed_at': originalAccessedAt,
+      if (originalMetadataJson != null)
+        'original_metadata_json': originalMetadataJson,
       if (category != null) 'category': category,
       if (status != null) 'status': status,
       if (encryptedFileName != null) 'encrypted_file_name': encryptedFileName,
@@ -1359,6 +1518,9 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
     Value<String?>? originalTreeRelativePath,
     Value<DateTime>? importedAt,
     Value<DateTime?>? fileModifiedAt,
+    Value<DateTime?>? originalCreatedAt,
+    Value<DateTime?>? originalAccessedAt,
+    Value<String?>? originalMetadataJson,
     Value<String>? category,
     Value<String>? status,
     Value<String>? encryptedFileName,
@@ -1389,6 +1551,9 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
           originalTreeRelativePath ?? this.originalTreeRelativePath,
       importedAt: importedAt ?? this.importedAt,
       fileModifiedAt: fileModifiedAt ?? this.fileModifiedAt,
+      originalCreatedAt: originalCreatedAt ?? this.originalCreatedAt,
+      originalAccessedAt: originalAccessedAt ?? this.originalAccessedAt,
+      originalMetadataJson: originalMetadataJson ?? this.originalMetadataJson,
       category: category ?? this.category,
       status: status ?? this.status,
       encryptedFileName: encryptedFileName ?? this.encryptedFileName,
@@ -1450,6 +1615,19 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
     }
     if (fileModifiedAt.present) {
       map['file_modified_at'] = Variable<DateTime>(fileModifiedAt.value);
+    }
+    if (originalCreatedAt.present) {
+      map['original_created_at'] = Variable<DateTime>(originalCreatedAt.value);
+    }
+    if (originalAccessedAt.present) {
+      map['original_accessed_at'] = Variable<DateTime>(
+        originalAccessedAt.value,
+      );
+    }
+    if (originalMetadataJson.present) {
+      map['original_metadata_json'] = Variable<String>(
+        originalMetadataJson.value,
+      );
     }
     if (category.present) {
       map['category'] = Variable<String>(category.value);
@@ -1516,6 +1694,9 @@ class VaultFilesCompanion extends UpdateCompanion<VaultFileRow> {
           ..write('originalTreeRelativePath: $originalTreeRelativePath, ')
           ..write('importedAt: $importedAt, ')
           ..write('fileModifiedAt: $fileModifiedAt, ')
+          ..write('originalCreatedAt: $originalCreatedAt, ')
+          ..write('originalAccessedAt: $originalAccessedAt, ')
+          ..write('originalMetadataJson: $originalMetadataJson, ')
           ..write('category: $category, ')
           ..write('status: $status, ')
           ..write('encryptedFileName: $encryptedFileName, ')
@@ -3584,6 +3765,575 @@ class VaultSmartAlbumsCompanion extends UpdateCompanion<VaultSmartAlbumRow> {
   }
 }
 
+class $VaultSyncStatesTable extends VaultSyncStates
+    with TableInfo<$VaultSyncStatesTable, VaultSyncStateRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $VaultSyncStatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _localFileIdMeta = const VerificationMeta(
+    'localFileId',
+  );
+  @override
+  late final GeneratedColumn<String> localFileId = GeneratedColumn<String>(
+    'local_file_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _logicalIdMeta = const VerificationMeta(
+    'logicalId',
+  );
+  @override
+  late final GeneratedColumn<String> logicalId = GeneratedColumn<String>(
+    'logical_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _latestVersionIdMeta = const VerificationMeta(
+    'latestVersionId',
+  );
+  @override
+  late final GeneratedColumn<String> latestVersionId = GeneratedColumn<String>(
+    'latest_version_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _knownVersionIdsJsonMeta =
+      const VerificationMeta('knownVersionIdsJson');
+  @override
+  late final GeneratedColumn<String> knownVersionIdsJson =
+      GeneratedColumn<String>(
+        'known_version_ids_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('[]'),
+      );
+  static const VerificationMeta _vectorJsonMeta = const VerificationMeta(
+    'vectorJson',
+  );
+  @override
+  late final GeneratedColumn<String> vectorJson = GeneratedColumn<String>(
+    'vector_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _lastPublishedRevisionIdMeta =
+      const VerificationMeta('lastPublishedRevisionId');
+  @override
+  late final GeneratedColumn<String> lastPublishedRevisionId =
+      GeneratedColumn<String>(
+        'last_published_revision_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastPublishedAtMeta = const VerificationMeta(
+    'lastPublishedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastPublishedAt =
+      GeneratedColumn<DateTime>(
+        'last_published_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _isConflictMeta = const VerificationMeta(
+    'isConflict',
+  );
+  @override
+  late final GeneratedColumn<bool> isConflict = GeneratedColumn<bool>(
+    'is_conflict',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_conflict" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    localFileId,
+    logicalId,
+    latestVersionId,
+    knownVersionIdsJson,
+    vectorJson,
+    lastPublishedRevisionId,
+    lastPublishedAt,
+    isConflict,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'vault_sync_states';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VaultSyncStateRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('local_file_id')) {
+      context.handle(
+        _localFileIdMeta,
+        localFileId.isAcceptableOrUnknown(
+          data['local_file_id']!,
+          _localFileIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localFileIdMeta);
+    }
+    if (data.containsKey('logical_id')) {
+      context.handle(
+        _logicalIdMeta,
+        logicalId.isAcceptableOrUnknown(data['logical_id']!, _logicalIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_logicalIdMeta);
+    }
+    if (data.containsKey('latest_version_id')) {
+      context.handle(
+        _latestVersionIdMeta,
+        latestVersionId.isAcceptableOrUnknown(
+          data['latest_version_id']!,
+          _latestVersionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('known_version_ids_json')) {
+      context.handle(
+        _knownVersionIdsJsonMeta,
+        knownVersionIdsJson.isAcceptableOrUnknown(
+          data['known_version_ids_json']!,
+          _knownVersionIdsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('vector_json')) {
+      context.handle(
+        _vectorJsonMeta,
+        vectorJson.isAcceptableOrUnknown(data['vector_json']!, _vectorJsonMeta),
+      );
+    }
+    if (data.containsKey('last_published_revision_id')) {
+      context.handle(
+        _lastPublishedRevisionIdMeta,
+        lastPublishedRevisionId.isAcceptableOrUnknown(
+          data['last_published_revision_id']!,
+          _lastPublishedRevisionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_published_at')) {
+      context.handle(
+        _lastPublishedAtMeta,
+        lastPublishedAt.isAcceptableOrUnknown(
+          data['last_published_at']!,
+          _lastPublishedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_conflict')) {
+      context.handle(
+        _isConflictMeta,
+        isConflict.isAcceptableOrUnknown(data['is_conflict']!, _isConflictMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {localFileId};
+  @override
+  VaultSyncStateRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VaultSyncStateRow(
+      localFileId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_file_id'],
+      )!,
+      logicalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}logical_id'],
+      )!,
+      latestVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}latest_version_id'],
+      ),
+      knownVersionIdsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}known_version_ids_json'],
+      )!,
+      vectorJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}vector_json'],
+      )!,
+      lastPublishedRevisionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_published_revision_id'],
+      ),
+      lastPublishedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_published_at'],
+      ),
+      isConflict: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_conflict'],
+      )!,
+    );
+  }
+
+  @override
+  $VaultSyncStatesTable createAlias(String alias) {
+    return $VaultSyncStatesTable(attachedDatabase, alias);
+  }
+}
+
+class VaultSyncStateRow extends DataClass
+    implements Insertable<VaultSyncStateRow> {
+  final String localFileId;
+  final String logicalId;
+  final String? latestVersionId;
+  final String knownVersionIdsJson;
+  final String vectorJson;
+  final String? lastPublishedRevisionId;
+  final DateTime? lastPublishedAt;
+  final bool isConflict;
+  const VaultSyncStateRow({
+    required this.localFileId,
+    required this.logicalId,
+    this.latestVersionId,
+    required this.knownVersionIdsJson,
+    required this.vectorJson,
+    this.lastPublishedRevisionId,
+    this.lastPublishedAt,
+    required this.isConflict,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['local_file_id'] = Variable<String>(localFileId);
+    map['logical_id'] = Variable<String>(logicalId);
+    if (!nullToAbsent || latestVersionId != null) {
+      map['latest_version_id'] = Variable<String>(latestVersionId);
+    }
+    map['known_version_ids_json'] = Variable<String>(knownVersionIdsJson);
+    map['vector_json'] = Variable<String>(vectorJson);
+    if (!nullToAbsent || lastPublishedRevisionId != null) {
+      map['last_published_revision_id'] = Variable<String>(
+        lastPublishedRevisionId,
+      );
+    }
+    if (!nullToAbsent || lastPublishedAt != null) {
+      map['last_published_at'] = Variable<DateTime>(lastPublishedAt);
+    }
+    map['is_conflict'] = Variable<bool>(isConflict);
+    return map;
+  }
+
+  VaultSyncStatesCompanion toCompanion(bool nullToAbsent) {
+    return VaultSyncStatesCompanion(
+      localFileId: Value(localFileId),
+      logicalId: Value(logicalId),
+      latestVersionId: latestVersionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(latestVersionId),
+      knownVersionIdsJson: Value(knownVersionIdsJson),
+      vectorJson: Value(vectorJson),
+      lastPublishedRevisionId: lastPublishedRevisionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPublishedRevisionId),
+      lastPublishedAt: lastPublishedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPublishedAt),
+      isConflict: Value(isConflict),
+    );
+  }
+
+  factory VaultSyncStateRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VaultSyncStateRow(
+      localFileId: serializer.fromJson<String>(json['localFileId']),
+      logicalId: serializer.fromJson<String>(json['logicalId']),
+      latestVersionId: serializer.fromJson<String?>(json['latestVersionId']),
+      knownVersionIdsJson: serializer.fromJson<String>(
+        json['knownVersionIdsJson'],
+      ),
+      vectorJson: serializer.fromJson<String>(json['vectorJson']),
+      lastPublishedRevisionId: serializer.fromJson<String?>(
+        json['lastPublishedRevisionId'],
+      ),
+      lastPublishedAt: serializer.fromJson<DateTime?>(json['lastPublishedAt']),
+      isConflict: serializer.fromJson<bool>(json['isConflict']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'localFileId': serializer.toJson<String>(localFileId),
+      'logicalId': serializer.toJson<String>(logicalId),
+      'latestVersionId': serializer.toJson<String?>(latestVersionId),
+      'knownVersionIdsJson': serializer.toJson<String>(knownVersionIdsJson),
+      'vectorJson': serializer.toJson<String>(vectorJson),
+      'lastPublishedRevisionId': serializer.toJson<String?>(
+        lastPublishedRevisionId,
+      ),
+      'lastPublishedAt': serializer.toJson<DateTime?>(lastPublishedAt),
+      'isConflict': serializer.toJson<bool>(isConflict),
+    };
+  }
+
+  VaultSyncStateRow copyWith({
+    String? localFileId,
+    String? logicalId,
+    Value<String?> latestVersionId = const Value.absent(),
+    String? knownVersionIdsJson,
+    String? vectorJson,
+    Value<String?> lastPublishedRevisionId = const Value.absent(),
+    Value<DateTime?> lastPublishedAt = const Value.absent(),
+    bool? isConflict,
+  }) => VaultSyncStateRow(
+    localFileId: localFileId ?? this.localFileId,
+    logicalId: logicalId ?? this.logicalId,
+    latestVersionId: latestVersionId.present
+        ? latestVersionId.value
+        : this.latestVersionId,
+    knownVersionIdsJson: knownVersionIdsJson ?? this.knownVersionIdsJson,
+    vectorJson: vectorJson ?? this.vectorJson,
+    lastPublishedRevisionId: lastPublishedRevisionId.present
+        ? lastPublishedRevisionId.value
+        : this.lastPublishedRevisionId,
+    lastPublishedAt: lastPublishedAt.present
+        ? lastPublishedAt.value
+        : this.lastPublishedAt,
+    isConflict: isConflict ?? this.isConflict,
+  );
+  VaultSyncStateRow copyWithCompanion(VaultSyncStatesCompanion data) {
+    return VaultSyncStateRow(
+      localFileId: data.localFileId.present
+          ? data.localFileId.value
+          : this.localFileId,
+      logicalId: data.logicalId.present ? data.logicalId.value : this.logicalId,
+      latestVersionId: data.latestVersionId.present
+          ? data.latestVersionId.value
+          : this.latestVersionId,
+      knownVersionIdsJson: data.knownVersionIdsJson.present
+          ? data.knownVersionIdsJson.value
+          : this.knownVersionIdsJson,
+      vectorJson: data.vectorJson.present
+          ? data.vectorJson.value
+          : this.vectorJson,
+      lastPublishedRevisionId: data.lastPublishedRevisionId.present
+          ? data.lastPublishedRevisionId.value
+          : this.lastPublishedRevisionId,
+      lastPublishedAt: data.lastPublishedAt.present
+          ? data.lastPublishedAt.value
+          : this.lastPublishedAt,
+      isConflict: data.isConflict.present
+          ? data.isConflict.value
+          : this.isConflict,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VaultSyncStateRow(')
+          ..write('localFileId: $localFileId, ')
+          ..write('logicalId: $logicalId, ')
+          ..write('latestVersionId: $latestVersionId, ')
+          ..write('knownVersionIdsJson: $knownVersionIdsJson, ')
+          ..write('vectorJson: $vectorJson, ')
+          ..write('lastPublishedRevisionId: $lastPublishedRevisionId, ')
+          ..write('lastPublishedAt: $lastPublishedAt, ')
+          ..write('isConflict: $isConflict')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    localFileId,
+    logicalId,
+    latestVersionId,
+    knownVersionIdsJson,
+    vectorJson,
+    lastPublishedRevisionId,
+    lastPublishedAt,
+    isConflict,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VaultSyncStateRow &&
+          other.localFileId == this.localFileId &&
+          other.logicalId == this.logicalId &&
+          other.latestVersionId == this.latestVersionId &&
+          other.knownVersionIdsJson == this.knownVersionIdsJson &&
+          other.vectorJson == this.vectorJson &&
+          other.lastPublishedRevisionId == this.lastPublishedRevisionId &&
+          other.lastPublishedAt == this.lastPublishedAt &&
+          other.isConflict == this.isConflict);
+}
+
+class VaultSyncStatesCompanion extends UpdateCompanion<VaultSyncStateRow> {
+  final Value<String> localFileId;
+  final Value<String> logicalId;
+  final Value<String?> latestVersionId;
+  final Value<String> knownVersionIdsJson;
+  final Value<String> vectorJson;
+  final Value<String?> lastPublishedRevisionId;
+  final Value<DateTime?> lastPublishedAt;
+  final Value<bool> isConflict;
+  final Value<int> rowid;
+  const VaultSyncStatesCompanion({
+    this.localFileId = const Value.absent(),
+    this.logicalId = const Value.absent(),
+    this.latestVersionId = const Value.absent(),
+    this.knownVersionIdsJson = const Value.absent(),
+    this.vectorJson = const Value.absent(),
+    this.lastPublishedRevisionId = const Value.absent(),
+    this.lastPublishedAt = const Value.absent(),
+    this.isConflict = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  VaultSyncStatesCompanion.insert({
+    required String localFileId,
+    required String logicalId,
+    this.latestVersionId = const Value.absent(),
+    this.knownVersionIdsJson = const Value.absent(),
+    this.vectorJson = const Value.absent(),
+    this.lastPublishedRevisionId = const Value.absent(),
+    this.lastPublishedAt = const Value.absent(),
+    this.isConflict = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : localFileId = Value(localFileId),
+       logicalId = Value(logicalId);
+  static Insertable<VaultSyncStateRow> custom({
+    Expression<String>? localFileId,
+    Expression<String>? logicalId,
+    Expression<String>? latestVersionId,
+    Expression<String>? knownVersionIdsJson,
+    Expression<String>? vectorJson,
+    Expression<String>? lastPublishedRevisionId,
+    Expression<DateTime>? lastPublishedAt,
+    Expression<bool>? isConflict,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (localFileId != null) 'local_file_id': localFileId,
+      if (logicalId != null) 'logical_id': logicalId,
+      if (latestVersionId != null) 'latest_version_id': latestVersionId,
+      if (knownVersionIdsJson != null)
+        'known_version_ids_json': knownVersionIdsJson,
+      if (vectorJson != null) 'vector_json': vectorJson,
+      if (lastPublishedRevisionId != null)
+        'last_published_revision_id': lastPublishedRevisionId,
+      if (lastPublishedAt != null) 'last_published_at': lastPublishedAt,
+      if (isConflict != null) 'is_conflict': isConflict,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  VaultSyncStatesCompanion copyWith({
+    Value<String>? localFileId,
+    Value<String>? logicalId,
+    Value<String?>? latestVersionId,
+    Value<String>? knownVersionIdsJson,
+    Value<String>? vectorJson,
+    Value<String?>? lastPublishedRevisionId,
+    Value<DateTime?>? lastPublishedAt,
+    Value<bool>? isConflict,
+    Value<int>? rowid,
+  }) {
+    return VaultSyncStatesCompanion(
+      localFileId: localFileId ?? this.localFileId,
+      logicalId: logicalId ?? this.logicalId,
+      latestVersionId: latestVersionId ?? this.latestVersionId,
+      knownVersionIdsJson: knownVersionIdsJson ?? this.knownVersionIdsJson,
+      vectorJson: vectorJson ?? this.vectorJson,
+      lastPublishedRevisionId:
+          lastPublishedRevisionId ?? this.lastPublishedRevisionId,
+      lastPublishedAt: lastPublishedAt ?? this.lastPublishedAt,
+      isConflict: isConflict ?? this.isConflict,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (localFileId.present) {
+      map['local_file_id'] = Variable<String>(localFileId.value);
+    }
+    if (logicalId.present) {
+      map['logical_id'] = Variable<String>(logicalId.value);
+    }
+    if (latestVersionId.present) {
+      map['latest_version_id'] = Variable<String>(latestVersionId.value);
+    }
+    if (knownVersionIdsJson.present) {
+      map['known_version_ids_json'] = Variable<String>(
+        knownVersionIdsJson.value,
+      );
+    }
+    if (vectorJson.present) {
+      map['vector_json'] = Variable<String>(vectorJson.value);
+    }
+    if (lastPublishedRevisionId.present) {
+      map['last_published_revision_id'] = Variable<String>(
+        lastPublishedRevisionId.value,
+      );
+    }
+    if (lastPublishedAt.present) {
+      map['last_published_at'] = Variable<DateTime>(lastPublishedAt.value);
+    }
+    if (isConflict.present) {
+      map['is_conflict'] = Variable<bool>(isConflict.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VaultSyncStatesCompanion(')
+          ..write('localFileId: $localFileId, ')
+          ..write('logicalId: $logicalId, ')
+          ..write('latestVersionId: $latestVersionId, ')
+          ..write('knownVersionIdsJson: $knownVersionIdsJson, ')
+          ..write('vectorJson: $vectorJson, ')
+          ..write('lastPublishedRevisionId: $lastPublishedRevisionId, ')
+          ..write('lastPublishedAt: $lastPublishedAt, ')
+          ..write('isConflict: $isConflict, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3600,6 +4350,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $VaultSmartAlbumsTable vaultSmartAlbums = $VaultSmartAlbumsTable(
     this,
   );
+  late final $VaultSyncStatesTable vaultSyncStates = $VaultSyncStatesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3613,6 +4366,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     vaultCollections,
     vaultCollectionFiles,
     vaultSmartAlbums,
+    vaultSyncStates,
   ];
 }
 
@@ -3630,6 +4384,9 @@ typedef $$VaultFilesTableCreateCompanionBuilder =
       Value<String?> originalTreeRelativePath,
       required DateTime importedAt,
       Value<DateTime?> fileModifiedAt,
+      Value<DateTime?> originalCreatedAt,
+      Value<DateTime?> originalAccessedAt,
+      Value<String?> originalMetadataJson,
       required String category,
       required String status,
       required String encryptedFileName,
@@ -3660,6 +4417,9 @@ typedef $$VaultFilesTableUpdateCompanionBuilder =
       Value<String?> originalTreeRelativePath,
       Value<DateTime> importedAt,
       Value<DateTime?> fileModifiedAt,
+      Value<DateTime?> originalCreatedAt,
+      Value<DateTime?> originalAccessedAt,
+      Value<String?> originalMetadataJson,
       Value<String> category,
       Value<String> status,
       Value<String> encryptedFileName,
@@ -3743,6 +4503,21 @@ class $$VaultFilesTableFilterComposer
 
   ColumnFilters<DateTime> get fileModifiedAt => $composableBuilder(
     column: $table.fileModifiedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get originalCreatedAt => $composableBuilder(
+    column: $table.originalCreatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get originalAccessedAt => $composableBuilder(
+    column: $table.originalAccessedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originalMetadataJson => $composableBuilder(
+    column: $table.originalMetadataJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3886,6 +4661,21 @@ class $$VaultFilesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get originalCreatedAt => $composableBuilder(
+    column: $table.originalCreatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get originalAccessedAt => $composableBuilder(
+    column: $table.originalAccessedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originalMetadataJson => $composableBuilder(
+    column: $table.originalMetadataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get category => $composableBuilder(
     column: $table.category,
     builder: (column) => ColumnOrderings(column),
@@ -4018,6 +4808,21 @@ class $$VaultFilesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<DateTime> get originalCreatedAt => $composableBuilder(
+    column: $table.originalCreatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get originalAccessedAt => $composableBuilder(
+    column: $table.originalAccessedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get originalMetadataJson => $composableBuilder(
+    column: $table.originalMetadataJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get category =>
       $composableBuilder(column: $table.category, builder: (column) => column);
 
@@ -4124,6 +4929,9 @@ class $$VaultFilesTableTableManager
                 Value<String?> originalTreeRelativePath = const Value.absent(),
                 Value<DateTime> importedAt = const Value.absent(),
                 Value<DateTime?> fileModifiedAt = const Value.absent(),
+                Value<DateTime?> originalCreatedAt = const Value.absent(),
+                Value<DateTime?> originalAccessedAt = const Value.absent(),
+                Value<String?> originalMetadataJson = const Value.absent(),
                 Value<String> category = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String> encryptedFileName = const Value.absent(),
@@ -4153,6 +4961,9 @@ class $$VaultFilesTableTableManager
                 originalTreeRelativePath: originalTreeRelativePath,
                 importedAt: importedAt,
                 fileModifiedAt: fileModifiedAt,
+                originalCreatedAt: originalCreatedAt,
+                originalAccessedAt: originalAccessedAt,
+                originalMetadataJson: originalMetadataJson,
                 category: category,
                 status: status,
                 encryptedFileName: encryptedFileName,
@@ -4183,6 +4994,9 @@ class $$VaultFilesTableTableManager
                 Value<String?> originalTreeRelativePath = const Value.absent(),
                 required DateTime importedAt,
                 Value<DateTime?> fileModifiedAt = const Value.absent(),
+                Value<DateTime?> originalCreatedAt = const Value.absent(),
+                Value<DateTime?> originalAccessedAt = const Value.absent(),
+                Value<String?> originalMetadataJson = const Value.absent(),
                 required String category,
                 required String status,
                 required String encryptedFileName,
@@ -4212,6 +5026,9 @@ class $$VaultFilesTableTableManager
                 originalTreeRelativePath: originalTreeRelativePath,
                 importedAt: importedAt,
                 fileModifiedAt: fileModifiedAt,
+                originalCreatedAt: originalCreatedAt,
+                originalAccessedAt: originalAccessedAt,
+                originalMetadataJson: originalMetadataJson,
                 category: category,
                 status: status,
                 encryptedFileName: encryptedFileName,
@@ -5503,6 +6320,283 @@ typedef $$VaultSmartAlbumsTableProcessedTableManager =
       VaultSmartAlbumRow,
       PrefetchHooks Function()
     >;
+typedef $$VaultSyncStatesTableCreateCompanionBuilder =
+    VaultSyncStatesCompanion Function({
+      required String localFileId,
+      required String logicalId,
+      Value<String?> latestVersionId,
+      Value<String> knownVersionIdsJson,
+      Value<String> vectorJson,
+      Value<String?> lastPublishedRevisionId,
+      Value<DateTime?> lastPublishedAt,
+      Value<bool> isConflict,
+      Value<int> rowid,
+    });
+typedef $$VaultSyncStatesTableUpdateCompanionBuilder =
+    VaultSyncStatesCompanion Function({
+      Value<String> localFileId,
+      Value<String> logicalId,
+      Value<String?> latestVersionId,
+      Value<String> knownVersionIdsJson,
+      Value<String> vectorJson,
+      Value<String?> lastPublishedRevisionId,
+      Value<DateTime?> lastPublishedAt,
+      Value<bool> isConflict,
+      Value<int> rowid,
+    });
+
+class $$VaultSyncStatesTableFilterComposer
+    extends Composer<_$AppDatabase, $VaultSyncStatesTable> {
+  $$VaultSyncStatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get localFileId => $composableBuilder(
+    column: $table.localFileId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get logicalId => $composableBuilder(
+    column: $table.logicalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get latestVersionId => $composableBuilder(
+    column: $table.latestVersionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get knownVersionIdsJson => $composableBuilder(
+    column: $table.knownVersionIdsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get vectorJson => $composableBuilder(
+    column: $table.vectorJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastPublishedRevisionId => $composableBuilder(
+    column: $table.lastPublishedRevisionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastPublishedAt => $composableBuilder(
+    column: $table.lastPublishedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isConflict => $composableBuilder(
+    column: $table.isConflict,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$VaultSyncStatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $VaultSyncStatesTable> {
+  $$VaultSyncStatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get localFileId => $composableBuilder(
+    column: $table.localFileId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get logicalId => $composableBuilder(
+    column: $table.logicalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get latestVersionId => $composableBuilder(
+    column: $table.latestVersionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get knownVersionIdsJson => $composableBuilder(
+    column: $table.knownVersionIdsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get vectorJson => $composableBuilder(
+    column: $table.vectorJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastPublishedRevisionId => $composableBuilder(
+    column: $table.lastPublishedRevisionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastPublishedAt => $composableBuilder(
+    column: $table.lastPublishedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isConflict => $composableBuilder(
+    column: $table.isConflict,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$VaultSyncStatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $VaultSyncStatesTable> {
+  $$VaultSyncStatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get localFileId => $composableBuilder(
+    column: $table.localFileId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get logicalId =>
+      $composableBuilder(column: $table.logicalId, builder: (column) => column);
+
+  GeneratedColumn<String> get latestVersionId => $composableBuilder(
+    column: $table.latestVersionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get knownVersionIdsJson => $composableBuilder(
+    column: $table.knownVersionIdsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get vectorJson => $composableBuilder(
+    column: $table.vectorJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastPublishedRevisionId => $composableBuilder(
+    column: $table.lastPublishedRevisionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastPublishedAt => $composableBuilder(
+    column: $table.lastPublishedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isConflict => $composableBuilder(
+    column: $table.isConflict,
+    builder: (column) => column,
+  );
+}
+
+class $$VaultSyncStatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $VaultSyncStatesTable,
+          VaultSyncStateRow,
+          $$VaultSyncStatesTableFilterComposer,
+          $$VaultSyncStatesTableOrderingComposer,
+          $$VaultSyncStatesTableAnnotationComposer,
+          $$VaultSyncStatesTableCreateCompanionBuilder,
+          $$VaultSyncStatesTableUpdateCompanionBuilder,
+          (
+            VaultSyncStateRow,
+            BaseReferences<
+              _$AppDatabase,
+              $VaultSyncStatesTable,
+              VaultSyncStateRow
+            >,
+          ),
+          VaultSyncStateRow,
+          PrefetchHooks Function()
+        > {
+  $$VaultSyncStatesTableTableManager(
+    _$AppDatabase db,
+    $VaultSyncStatesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$VaultSyncStatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$VaultSyncStatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$VaultSyncStatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> localFileId = const Value.absent(),
+                Value<String> logicalId = const Value.absent(),
+                Value<String?> latestVersionId = const Value.absent(),
+                Value<String> knownVersionIdsJson = const Value.absent(),
+                Value<String> vectorJson = const Value.absent(),
+                Value<String?> lastPublishedRevisionId = const Value.absent(),
+                Value<DateTime?> lastPublishedAt = const Value.absent(),
+                Value<bool> isConflict = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => VaultSyncStatesCompanion(
+                localFileId: localFileId,
+                logicalId: logicalId,
+                latestVersionId: latestVersionId,
+                knownVersionIdsJson: knownVersionIdsJson,
+                vectorJson: vectorJson,
+                lastPublishedRevisionId: lastPublishedRevisionId,
+                lastPublishedAt: lastPublishedAt,
+                isConflict: isConflict,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String localFileId,
+                required String logicalId,
+                Value<String?> latestVersionId = const Value.absent(),
+                Value<String> knownVersionIdsJson = const Value.absent(),
+                Value<String> vectorJson = const Value.absent(),
+                Value<String?> lastPublishedRevisionId = const Value.absent(),
+                Value<DateTime?> lastPublishedAt = const Value.absent(),
+                Value<bool> isConflict = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => VaultSyncStatesCompanion.insert(
+                localFileId: localFileId,
+                logicalId: logicalId,
+                latestVersionId: latestVersionId,
+                knownVersionIdsJson: knownVersionIdsJson,
+                vectorJson: vectorJson,
+                lastPublishedRevisionId: lastPublishedRevisionId,
+                lastPublishedAt: lastPublishedAt,
+                isConflict: isConflict,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$VaultSyncStatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $VaultSyncStatesTable,
+      VaultSyncStateRow,
+      $$VaultSyncStatesTableFilterComposer,
+      $$VaultSyncStatesTableOrderingComposer,
+      $$VaultSyncStatesTableAnnotationComposer,
+      $$VaultSyncStatesTableCreateCompanionBuilder,
+      $$VaultSyncStatesTableUpdateCompanionBuilder,
+      (
+        VaultSyncStateRow,
+        BaseReferences<_$AppDatabase, $VaultSyncStatesTable, VaultSyncStateRow>,
+      ),
+      VaultSyncStateRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5523,4 +6617,6 @@ class $AppDatabaseManager {
       $$VaultCollectionFilesTableTableManager(_db, _db.vaultCollectionFiles);
   $$VaultSmartAlbumsTableTableManager get vaultSmartAlbums =>
       $$VaultSmartAlbumsTableTableManager(_db, _db.vaultSmartAlbums);
+  $$VaultSyncStatesTableTableManager get vaultSyncStates =>
+      $$VaultSyncStatesTableTableManager(_db, _db.vaultSyncStates);
 }

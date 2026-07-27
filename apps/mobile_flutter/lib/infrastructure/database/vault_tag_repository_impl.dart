@@ -41,9 +41,14 @@ class VaultTagRepositoryImpl implements VaultTagRepository {
   }
 
   @override
-  Future<void> deleteTag(String id) async {
-    await (_db.delete(_db.vaultFileTags)..where((t) => t.tagId.equals(id))).go();
-    await (_db.delete(_db.vaultTags)..where((t) => t.id.equals(id))).go();
+  Future<void> deleteTag(String id) {
+    return _db.transaction(() async {
+      await (_db.delete(_db.vaultFileTags)..where((t) => t.tagId.equals(id))).go();
+      await (_db.update(_db.vaultSmartAlbums)..where((t) => t.tagId.equals(id))).write(
+        const VaultSmartAlbumsCompanion(tagId: Value(null)),
+      );
+      await (_db.delete(_db.vaultTags)..where((t) => t.id.equals(id))).go();
+    });
   }
 
   @override

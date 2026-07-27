@@ -5,7 +5,7 @@ Cada vez que se modifica la app (`apps/mobile_flutter`), seguir este ciclo técn
 1. **Implementar el cambio.**
 2. **`flutter analyze`** (desde `apps/mobile_flutter`) — debe quedar limpio. Leer la salida, no asumir que "sin crash" equivale a "sin warnings".
 3. **`flutter test`** (desde `apps/mobile_flutter`) — debe pasar.
-4. **`tool/deploy.sh [ip:puerto]`** — compila el APK debug, lo instala por adb inalámbrico y empuja una copia renombrada a la carpeta de APKs del celular. El `ip:puerto` de depuración inalámbrica cambia seguido (a veces la IP también); si `adb devices` no muestra el teléfono, pedir el valor actual en vez de reusar el anterior a ciegas.
+4. **`tool/deploy.sh [ip:puerto]`** — compila el APK debug, lo instala por adb inalámbrico y empuja una copia renombrada a la carpeta de APKs del celular. Antes de sobrescribir esa copia, si ya existe una en el destino, el script la mueve a una subcarpeta `respaldo/` con timestamp — nunca la borra sin más. El `ip:puerto` de depuración inalámbrica cambia seguido (a veces la IP también); si `adb devices` no muestra el teléfono, pedir el valor actual en vez de reusar el anterior a ciegas.
 
 ## Por qué este orden
 

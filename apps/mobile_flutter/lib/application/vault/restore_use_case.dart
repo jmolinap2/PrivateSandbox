@@ -11,7 +11,9 @@ import '../../domain/repositories/vault_repository.dart';
 import '../../infrastructure/encryption/key_manager.dart';
 import '../../infrastructure/encryption/stream_cipher.dart';
 import '../../infrastructure/platform/original_location_channel.dart';
+import '../../infrastructure/storage/atomic_file_writer.dart';
 import '../../infrastructure/storage/vault_paths.dart';
+import 'vault_file_lifecycle.dart';
 
 enum RestoreResult { restoredToOriginal, needsDestination }
 
@@ -28,15 +30,16 @@ class RestoreUseCase {
   final KeyManager _keyManager;
   final OriginalLocationChannel _originalLocationChannel;
   final ActivityRepository _activityRepository;
-  final VaultRepository _vaultRepository;
+  final VaultFileLifecycle _lifecycle;
   static const _uuid = Uuid();
 
   RestoreUseCase(
     this._keyManager,
     this._originalLocationChannel,
     this._activityRepository,
-    this._vaultRepository,
-  );
+    VaultRepository vaultRepository, {
+    VaultFileLifecycle? lifecycle,
+  }) : _lifecycle = lifecycle ?? VaultFileLifecycle(vaultRepository);
 
   Future<RestoreResult> call(VaultFile file) async {
     // Exactly one of these is ever set on a given file, by construction at
@@ -46,7 +49,9 @@ class RestoreUseCase {
     final treeUri = file.originalTreeUri;
     final treeRelativePath = file.originalTreeRelativePath;
     final originalUri = file.originalContentUri;
-    if (relativePath == null && (treeUri == null || treeRelativePath == null) && originalUri == null) {
+    if (relativePath == null &&
+        (treeUri == null || treeRelativePath == null) &&
+        originalUri == null) {
       return RestoreResult.needsDestination;
     }
 
@@ -59,6 +64,9 @@ class RestoreUseCase {
           displayName: file.originalName,
           mimeType: file.mimeType,
           sourcePath: decrypted.path,
+          modifiedAt: file.fileModifiedAt,
+          createdAt: file.originalCreatedAt,
+          accessedAt: file.originalAccessedAt,
         );
       } else if (treeUri != null && treeRelativePath != null) {
         restored = await _originalLocationChannel.recreateInDocumentTree(
@@ -67,9 +75,18 @@ class RestoreUseCase {
           displayName: file.originalName,
           mimeType: file.mimeType,
           sourcePath: decrypted.path,
+          modifiedAt: file.fileModifiedAt,
+          createdAt: file.originalCreatedAt,
+          accessedAt: file.originalAccessedAt,
         );
       } else {
-        restored = await _originalLocationChannel.restoreToUri(originalUri!, decrypted.path);
+        restored = await _originalLocationChannel.restoreToUri(
+          originalUri!,
+          decrypted.path,
+          modifiedAt: file.fileModifiedAt,
+          createdAt: file.originalCreatedAt,
+          accessedAt: file.originalAccessedAt,
+        );
       }
       if (!restored) return RestoreResult.needsDestination;
     } finally {
@@ -78,69 +95,57 @@ class RestoreUseCase {
       }
     }
 
-    await _removeFromVault(file);
+    final cleanup = await finalizeRestore(file);
 
-    await _activityRepository.logEvent(ActivityEvent(
-      id: _uuid.v4(),
-      type: ActivityEventType.exported,
-      fileName: file.originalName,
-      timestamp: DateTime.now(),
-      success: true,
-      detail: 'Restaurado en su ubicación original',
-    ));
+    try {
+      await _activityRepository.logEvent(
+        ActivityEvent(
+          id: _uuid.v4(),
+          type: ActivityEventType.exported,
+          fileName: file.originalName,
+          timestamp: DateTime.now(),
+          success: cleanup.isComplete,
+          detail: cleanup.isComplete
+              ? 'Restaurado en su ubicación original'
+              : 'Restaurado; ${cleanup.failedPaths.length} artefacto(s) cifrado(s) esperan limpieza automática',
+        ),
+      );
+    } catch (_) {
+      // The restore and metadata commit already succeeded. An unavailable
+      // audit trail must not make the caller retry the external write.
+    }
     return RestoreResult.restoredToOriginal;
   }
 
-  Future<void> _removeFromVault(VaultFile file) async {
-    final blobsDir = await VaultPaths.vaultBlobsDir();
-
-    final blob = File(p.join(blobsDir.path, file.encryptedFileName));
-    if (await blob.exists()) {
-      await blob.delete();
-    }
-
-    final thumbnailFileName = file.thumbnailFileName;
-    if (thumbnailFileName != null) {
-      final thumbBlob = File(p.join(blobsDir.path, thumbnailFileName));
-      if (await thumbBlob.exists()) {
-        await thumbBlob.delete();
-      }
-    }
-
-    await _vaultRepository.deleteFile(file.id);
+  /// Finalizes a restore performed through an explicitly chosen destination.
+  ///
+  /// The DB record is removed before its encrypted artifacts, so a failed
+  /// metadata commit always leaves the vault copy fully usable.
+  Future<ArtifactCleanupResult> finalizeRestore(VaultFile file) {
+    return _lifecycle.deleteRecordThenArtifacts(file);
   }
 
   Future<File> _decryptToTemp(VaultFile file) async {
     final blobsDir = await VaultPaths.vaultBlobsDir();
     final encryptedFile = File(p.join(blobsDir.path, file.encryptedFileName));
     final masterKey = await _keyManager.getOrCreateMasterKey();
-    final fileKey = await _keyManager.deriveFileKey(masterKey, base64Decode(file.fileSaltBase64));
+    final fileKey = await _keyManager.deriveFileKey(
+      masterKey,
+      base64Decode(file.fileSaltBase64),
+    );
 
     final tempDir = await VaultPaths.tempPlaybackDir();
-    final tempFile = File(p.join(tempDir.path, 'restore_${file.id}'));
-    final sink = tempFile.openWrite();
-    try {
-      await for (final chunk in StreamCipher.decryptStream(
+    return AtomicFileWriter.writeStream(
+      destinationDirectory: tempDir,
+      preferredName: 'restore_${file.id}',
+      expectedLength: file.sizeBytes,
+      modifiedAt: file.fileModifiedAt,
+      bytes: StreamCipher.decryptStream(
         input: encryptedFile,
         fileKey: fileKey,
         noncePrefix: base64Decode(file.noncePrefixBase64),
         plainFileSize: file.sizeBytes,
-      )) {
-        sink.add(chunk);
-      }
-      await sink.flush();
-    } catch (_) {
-      // A decryption failure partway through (corrupt ciphertext, I/O
-      // error) would otherwise leave a partial plaintext file sitting in
-      // the temp dir — delete it rather than let the caller's cleanup miss
-      // it because `tempFile` was never actually returned.
-      if (await tempFile.exists()) {
-        await tempFile.delete();
-      }
-      rethrow;
-    } finally {
-      await sink.close();
-    }
-    return tempFile;
+      ),
+    );
   }
 }

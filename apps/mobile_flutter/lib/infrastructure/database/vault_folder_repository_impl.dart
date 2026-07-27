@@ -48,9 +48,13 @@ class VaultFolderRepositoryImpl implements VaultFolderRepository {
 
   @override
   Future<void> deleteFolder(String id) async {
+    await _db.transaction(() => _deleteFolderRecursive(id));
+  }
+
+  Future<void> _deleteFolderRecursive(String id) async {
     final childIds = await (_db.select(_db.vaultFolders)..where((t) => t.parentId.equals(id))).get();
     for (final child in childIds) {
-      await deleteFolder(child.id);
+      await _deleteFolderRecursive(child.id);
     }
     await (_db.update(_db.vaultFiles)..where((t) => t.folderId.equals(id))).write(
       const VaultFilesCompanion(folderId: Value(null)),

@@ -4,6 +4,7 @@ abstract interface class AuthRepository {
   Future<bool> hasPin();
   Future<void> setPin(String pin);
   Future<bool> verifyPin(String pin);
+  Future<Duration?> getPinRetryDelay();
 
   Future<bool> isBiometricAvailable();
   Future<bool> isBiometricEnabled();

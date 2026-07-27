@@ -91,12 +91,15 @@ class MainActivity : FlutterFragmentActivity() {
                     "restoreToUri" -> {
                         val uriString = call.argument<String>("uri")
                         val sourcePath = call.argument<String>("sourcePath")
+                        val modifiedAtEpochMs = call.argument<Number>("modifiedAtEpochMs")?.toLong()
                         if (uriString.isNullOrEmpty() || sourcePath.isNullOrEmpty()) {
                             result.error("invalid_argument", "uri and sourcePath are required", null)
                         } else {
                             // Videos can be hundreds of MB — copying them here would
                             // block the platform/UI thread for seconds otherwise.
-                            runOffMainThread(result) { restoreToUri(uriString, sourcePath) }
+                            runOffMainThread(result) {
+                                restoreToUri(uriString, sourcePath, modifiedAtEpochMs)
+                            }
                         }
                     }
                     "recreateInMediaStore" -> {
@@ -104,11 +107,20 @@ class MainActivity : FlutterFragmentActivity() {
                         val displayName = call.argument<String>("displayName")
                         val mimeType = call.argument<String>("mimeType")
                         val sourcePath = call.argument<String>("sourcePath")
+                        val modifiedAtEpochMs = call.argument<Number>("modifiedAtEpochMs")?.toLong()
+                        val createdAtEpochMs = call.argument<Number>("createdAtEpochMs")?.toLong()
                         if (relativePath.isNullOrEmpty() || displayName.isNullOrEmpty() || sourcePath.isNullOrEmpty()) {
                             result.error("invalid_argument", "relativePath, displayName and sourcePath are required", null)
                         } else {
                             runOffMainThread(result) {
-                                recreateInMediaStore(relativePath, displayName, mimeType, sourcePath)
+                                recreateInMediaStore(
+                                    relativePath,
+                                    displayName,
+                                    mimeType,
+                                    sourcePath,
+                                    modifiedAtEpochMs,
+                                    createdAtEpochMs,
+                                )
                             }
                         }
                     }
@@ -138,6 +150,7 @@ class MainActivity : FlutterFragmentActivity() {
                         val displayName = call.argument<String>("displayName")
                         val mimeType = call.argument<String>("mimeType")
                         val sourcePath = call.argument<String>("sourcePath")
+                        val modifiedAtEpochMs = call.argument<Number>("modifiedAtEpochMs")?.toLong()
                         if (treeUri.isNullOrEmpty() || relativeFolderPath == null || displayName.isNullOrEmpty() || sourcePath.isNullOrEmpty()) {
                             result.error(
                                 "invalid_argument",
@@ -146,7 +159,14 @@ class MainActivity : FlutterFragmentActivity() {
                             )
                         } else {
                             runOffMainThread(result) {
-                                recreateInDocumentTree(treeUri, relativeFolderPath, displayName, mimeType, sourcePath)
+                                recreateInDocumentTree(
+                                    treeUri,
+                                    relativeFolderPath,
+                                    displayName,
+                                    mimeType,
+                                    sourcePath,
+                                    modifiedAtEpochMs,
+                                )
                             }
                         }
                     }
@@ -343,7 +363,9 @@ class MainActivity : FlutterFragmentActivity() {
         displayName: String,
         mimeType: String?,
         sourcePath: String,
+        modifiedAtEpochMs: Long?,
     ): Boolean {
+        var createdDocument: DocumentFile? = null
         return try {
             var dir = DocumentFile.fromTreeUri(this, Uri.parse(treeUriString)) ?: return false
             if (relativeFolderPath.isNotEmpty()) {
@@ -360,23 +382,63 @@ class MainActivity : FlutterFragmentActivity() {
                     ?: "application/octet-stream"
             }
             val newFile = dir.createFile(resolvedMime, displayName) ?: return false
-            contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                File(sourcePath).inputStream().use { input -> input.copyTo(out) }
-            } ?: return false
+            createdDocument = newFile
+            val source = File(sourcePath)
+            val copied = contentResolver.openOutputStream(newFile.uri, "wt")?.use { out ->
+                source.inputStream().use { input -> input.copyTo(out) }
+            } ?: run {
+                newFile.delete()
+                return false
+            }
+            if (copied != source.length()) {
+                newFile.delete()
+                return false
+            }
+            if (modifiedAtEpochMs != null) {
+                try {
+                    val timestamps = ContentValues().apply {
+                        put(DocumentsContract.Document.COLUMN_LAST_MODIFIED, modifiedAtEpochMs)
+                    }
+                    contentResolver.update(newFile.uri, timestamps, null, null)
+                } catch (_: Exception) {
+                    // Many document providers expose last-modified read-only.
+                }
+            }
             true
         } catch (e: Exception) {
+            try {
+                createdDocument?.delete()
+            } catch (_: Exception) {
+                // Best effort; the provider may already have removed it.
+            }
             Log.e(TAG, "recreateInDocumentTree failed for $displayName", e)
             false
         }
     }
 
     /** Overwrites [uriString] with the bytes at [sourcePath], if still possible. */
-    private fun restoreToUri(uriString: String, sourcePath: String): Boolean {
+    private fun restoreToUri(
+        uriString: String,
+        sourcePath: String,
+        modifiedAtEpochMs: Long?,
+    ): Boolean {
         return try {
             val uri = Uri.parse(uriString)
-            contentResolver.openOutputStream(uri, "wt")?.use { out ->
-                File(sourcePath).inputStream().use { input -> input.copyTo(out) }
+            val source = File(sourcePath)
+            val copied = contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                source.inputStream().use { input -> input.copyTo(out) }
             } ?: return false
+            if (copied != source.length()) return false
+            if (modifiedAtEpochMs != null) {
+                try {
+                    val timestamps = ContentValues().apply {
+                        put(DocumentsContract.Document.COLUMN_LAST_MODIFIED, modifiedAtEpochMs)
+                    }
+                    contentResolver.update(uri, timestamps, null, null)
+                } catch (_: Exception) {
+                    // Timestamp restoration is best-effort for SAF providers.
+                }
+            }
             true
         } catch (_: Exception) {
             false
@@ -396,7 +458,10 @@ class MainActivity : FlutterFragmentActivity() {
         displayName: String,
         mimeType: String?,
         sourcePath: String,
+        modifiedAtEpochMs: Long?,
+        createdAtEpochMs: Long?,
     ): Boolean {
+        var insertedUri: Uri? = null
         return try {
             // [mimeType] comes from the vault's stored value, guessed from the
             // file name at import time — fall back to guessing from
@@ -423,18 +488,27 @@ class MainActivity : FlutterFragmentActivity() {
                     put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
+                modifiedAtEpochMs?.let {
+                    put(MediaStore.MediaColumns.DATE_MODIFIED, it / 1000L)
+                }
+                createdAtEpochMs?.let {
+                    put(MediaStore.MediaColumns.DATE_ADDED, it / 1000L)
+                }
             }
             val uri = contentResolver.insert(collection, values)
             if (uri == null) {
                 Log.e(TAG, "recreateInMediaStore: insert returned null for $displayName ($resolvedMime)")
                 return false
             }
-            val written = contentResolver.openOutputStream(uri)?.use { out ->
-                File(sourcePath).inputStream().use { input -> input.copyTo(out) }
+            insertedUri = uri
+            val source = File(sourcePath)
+            val written = contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                source.inputStream().use { input -> input.copyTo(out) }
             }
-            if (written == null) {
+            if (written == null || written != source.length()) {
                 Log.e(TAG, "recreateInMediaStore: openOutputStream returned null for $uri")
                 contentResolver.delete(uri, null, null)
+                insertedUri = null
                 return false
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -443,6 +517,13 @@ class MainActivity : FlutterFragmentActivity() {
             }
             true
         } catch (e: Exception) {
+            insertedUri?.let { uri ->
+                try {
+                    contentResolver.delete(uri, null, null)
+                } catch (_: Exception) {
+                    // Best effort cleanup of an unpublished/partial row.
+                }
+            }
             Log.e(TAG, "recreateInMediaStore failed for $displayName", e)
             false
         }

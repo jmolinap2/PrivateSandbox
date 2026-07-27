@@ -10,6 +10,7 @@ import '../../domain/repositories/activity_repository.dart';
 import '../../infrastructure/encryption/key_manager.dart';
 import '../../infrastructure/encryption/stream_cipher.dart';
 import '../../infrastructure/platform/system_channel.dart';
+import '../../infrastructure/storage/atomic_file_writer.dart';
 import '../../infrastructure/storage/vault_paths.dart';
 
 /// Fase 3's "compartición controlada": decrypts a vault file into the private
@@ -28,53 +29,67 @@ class ShareUseCase {
 
   Future<bool> call(VaultFile file) async {
     final shareDir = await VaultPaths.tempShareDir();
-    // Keep the original name (so the receiver shows the right file name) but
-    // strip any path separators a stored name might contain.
-    final safeName = p.basename(file.originalName);
-    final outputFile = File(p.join(shareDir.path, safeName));
 
     final blobsDir = await VaultPaths.vaultBlobsDir();
     final encryptedFile = File(p.join(blobsDir.path, file.encryptedFileName));
     final masterKey = await _keyManager.getOrCreateMasterKey();
-    final fileKey = await _keyManager.deriveFileKey(masterKey, base64Decode(file.fileSaltBase64));
-
-    final sink = outputFile.openWrite();
-    try {
-      await for (final chunk in StreamCipher.decryptStream(
-        input: encryptedFile,
-        fileKey: fileKey,
-        noncePrefix: base64Decode(file.noncePrefixBase64),
-        plainFileSize: file.sizeBytes,
-      )) {
-        sink.add(chunk);
-      }
-      await sink.flush();
-    } catch (_) {
-      await sink.close();
-      if (await outputFile.exists()) {
-        try {
-          await outputFile.delete();
-        } catch (_) {
-          // Best-effort cleanup of the partial file.
-        }
-      }
-      rethrow;
-    }
-    await sink.close();
-
-    final shared = await _systemChannel.shareFile(
-      sourcePath: outputFile.path,
-      mimeType: file.mimeType,
-      displayName: file.originalName,
+    final fileKey = await _keyManager.deriveFileKey(
+      masterKey,
+      base64Decode(file.fileSaltBase64),
     );
 
-    await _activityRepository.logEvent(ActivityEvent(
-      id: _uuid.v4(),
-      type: ActivityEventType.exported,
-      fileName: file.originalName,
-      timestamp: DateTime.now(),
-      success: shared,
-    ));
-    return shared;
+    File? outputFile;
+    try {
+      outputFile = await AtomicFileWriter.writeStream(
+        destinationDirectory: shareDir,
+        preferredName: file.originalName,
+        expectedLength: file.sizeBytes,
+        bytes: StreamCipher.decryptStream(
+          input: encryptedFile,
+          fileKey: fileKey,
+          noncePrefix: base64Decode(file.noncePrefixBase64),
+          plainFileSize: file.sizeBytes,
+        ),
+      );
+
+      final shared = await _systemChannel.shareFile(
+        sourcePath: outputFile.path,
+        mimeType: file.mimeType,
+        displayName: file.originalName,
+      );
+      if (!shared) {
+        await _deleteBestEffort(outputFile);
+      }
+      await _logBestEffort(file.originalName, shared);
+      return shared;
+    } catch (_) {
+      if (outputFile != null) await _deleteBestEffort(outputFile);
+      await _logBestEffort(file.originalName, false);
+      rethrow;
+    }
+  }
+
+  Future<void> _deleteBestEffort(File file) async {
+    try {
+      if (await file.exists()) await file.delete();
+    } on FileSystemException {
+      // Startup cleanup is the final fallback for private share temporaries.
+    }
+  }
+
+  Future<void> _logBestEffort(String fileName, bool success) async {
+    try {
+      await _activityRepository.logEvent(
+        ActivityEvent(
+          id: _uuid.v4(),
+          type: ActivityEventType.exported,
+          fileName: fileName,
+          timestamp: DateTime.now(),
+          success: success,
+        ),
+      );
+    } catch (_) {
+      // Sharing already succeeded or failed independently from the audit log.
+    }
   }
 }

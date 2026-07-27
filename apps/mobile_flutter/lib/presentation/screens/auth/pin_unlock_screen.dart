@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../application/auth/auth_controller.dart';
 import '../../../application/providers.dart';
+import '../../../shared/errors/vault_exceptions.dart';
 import '../../widgets/numeric_keypad.dart';
 import '../../widgets/pin_dots.dart';
 
@@ -32,7 +33,12 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
     final available = await authRepo.isBiometricAvailable();
     if (mounted) setState(() => _biometricAvailable = enabled && available);
     if (!enabled || !available) return;
-    await ref.read(authControllerProvider.notifier).unlockWithBiometrics();
+    try {
+      await ref.read(authControllerProvider.notifier).unlockWithBiometrics();
+    } on KeyMaterialMissingException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    }
   }
 
   Future<void> _onDigit(String digit) async {
@@ -43,15 +49,37 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
     });
     if (_current.length == _pinLength) {
       setState(() => _checking = true);
-      final ok = await ref.read(authControllerProvider.notifier).unlockWithPin(_current);
-      if (!ok && mounted) {
+      bool ok;
+      try {
+        ok = await ref.read(authControllerProvider.notifier).unlockWithPin(_current);
+      } on KeyMaterialMissingException catch (error) {
+        if (!mounted) return;
         setState(() {
-          _error = 'PIN incorrecto';
+          _error = error.message;
+          _current = '';
+          _checking = false;
+        });
+        return;
+      }
+      if (!ok && mounted) {
+        final retryDelay = await ref.read(authRepositoryProvider).getPinRetryDelay();
+        if (!mounted) return;
+        setState(() {
+          _error = retryDelay == null
+              ? 'PIN incorrecto'
+              : 'Demasiados intentos. Vuelve a intentarlo en ${_formatRetryDelay(retryDelay)}.';
           _current = '';
           _checking = false;
         });
       }
     }
+  }
+
+  String _formatRetryDelay(Duration duration) {
+    final seconds = duration.inSeconds + 1;
+    if (seconds < 60) return '$seconds s';
+    final minutes = (seconds / 60).ceil();
+    return '$minutes min';
   }
 
   void _onBackspace() {

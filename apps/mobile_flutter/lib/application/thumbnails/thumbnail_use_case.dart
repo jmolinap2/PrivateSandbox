@@ -17,7 +17,10 @@ class GeneratedThumbnail {
   final String fileName;
   final String noncePrefixBase64;
 
-  const GeneratedThumbnail({required this.fileName, required this.noncePrefixBase64});
+  const GeneratedThumbnail({
+    required this.fileName,
+    required this.noncePrefixBase64,
+  });
 }
 
 /// Bridges raw JPEG preview bytes — [ThumbnailGenerator] for images,
@@ -42,22 +45,31 @@ class ThumbnailUseCase {
     required Uint8List fileSalt,
   }) async {
     final bytes = switch (category) {
-      FileCategory.image => await ThumbnailGenerator.generate(source: sourceFile, category: category),
-      FileCategory.video => await _originalLocationChannel.generateVideoThumbnail(sourceFile.path),
+      FileCategory.image => await ThumbnailGenerator.generate(
+        source: sourceFile,
+        category: category,
+      ),
+      FileCategory.video =>
+        await _originalLocationChannel.generateVideoThumbnail(sourceFile.path),
       _ => null,
     };
     if (bytes == null) return null;
 
     final tempDir = await VaultPaths.tempPlaybackDir();
     final tempPlain = File(p.join(tempDir.path, '$id.thumb.tmp'));
+    File? encryptedOutput;
     try {
       await tempPlain.writeAsBytes(bytes);
 
-      final thumbKey = await _keyManager.deriveThumbnailKey(masterKey, fileSalt);
+      final thumbKey = await _keyManager.deriveThumbnailKey(
+        masterKey,
+        fileSalt,
+      );
       final noncePrefix = randomBytes(8);
       final blobsDir = await VaultPaths.vaultBlobsDir();
       final fileName = '$id.thumb.bin';
       final outputFile = File(p.join(blobsDir.path, fileName));
+      encryptedOutput = outputFile;
 
       await StreamCipher.encryptFile(
         input: tempPlain,
@@ -66,8 +78,18 @@ class ThumbnailUseCase {
         noncePrefix: noncePrefix,
       );
 
-      return GeneratedThumbnail(fileName: fileName, noncePrefixBase64: base64Encode(noncePrefix));
+      return GeneratedThumbnail(
+        fileName: fileName,
+        noncePrefixBase64: base64Encode(noncePrefix),
+      );
     } catch (_) {
+      if (encryptedOutput != null && await encryptedOutput.exists()) {
+        try {
+          await encryptedOutput.delete();
+        } on FileSystemException {
+          // Recovery's canonical-thumbnail scan retries this cleanup.
+        }
+      }
       return null;
     } finally {
       if (await tempPlain.exists()) {
@@ -87,7 +109,10 @@ class ThumbnailUseCase {
       if (!await thumbFile.exists()) return null;
 
       final masterKey = await _keyManager.getOrCreateMasterKey();
-      final thumbKey = await _keyManager.deriveThumbnailKey(masterKey, base64Decode(fileSaltBase64));
+      final thumbKey = await _keyManager.deriveThumbnailKey(
+        masterKey,
+        base64Decode(fileSaltBase64),
+      );
       // Thumbnails are always well under one chunk (1 MiB), so the plain
       // size is just the encrypted length minus the single 16-byte MAC.
       final plainSize = await thumbFile.length() - 16;

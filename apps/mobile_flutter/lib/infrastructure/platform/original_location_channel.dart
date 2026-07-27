@@ -11,11 +11,16 @@ import 'package:flutter/services.dart';
 /// `DocumentsContract`/`MediaStore` APIs on the Android side (sometimes with
 /// a one-time system confirmation dialog).
 class OriginalLocationChannel {
-  static const _mediaStoreChannel = MethodChannel('privatesandbox.app/media_store');
+  static const _mediaStoreChannel = MethodChannel(
+    'privatesandbox.app/media_store',
+  );
 
   Future<bool> deleteContentUri(String uri) async {
     try {
-      final result = await _mediaStoreChannel.invokeMethod<bool>('deleteContentUri', {'uri': uri});
+      final result = await _mediaStoreChannel.invokeMethod<bool>(
+        'deleteContentUri',
+        {'uri': uri},
+      );
       return result ?? false;
     } on PlatformException {
       return false;
@@ -28,7 +33,10 @@ class OriginalLocationChannel {
   /// — Photo Picker URIs never support this, by Android design.
   Future<bool> takePersistableUriPermission(String uri) async {
     try {
-      final result = await _mediaStoreChannel.invokeMethod<bool>('takePersistableUriPermission', {'uri': uri});
+      final result = await _mediaStoreChannel.invokeMethod<bool>(
+        'takePersistableUriPermission',
+        {'uri': uri},
+      );
       return result ?? false;
     } on PlatformException {
       return false;
@@ -38,12 +46,22 @@ class OriginalLocationChannel {
   /// Overwrites the file at [uri] with the bytes at [sourcePath]. Returns
   /// false if the original location no longer exists or isn't writable —
   /// callers should fall back to asking the user for a destination.
-  Future<bool> restoreToUri(String uri, String sourcePath) async {
+  Future<bool> restoreToUri(
+    String uri,
+    String sourcePath, {
+    DateTime? modifiedAt,
+    DateTime? createdAt,
+    DateTime? accessedAt,
+  }) async {
     try {
-      final result = await _mediaStoreChannel.invokeMethod<bool>('restoreToUri', {
-        'uri': uri,
-        'sourcePath': sourcePath,
-      });
+      final result = await _mediaStoreChannel
+          .invokeMethod<bool>('restoreToUri', {
+            'uri': uri,
+            'sourcePath': sourcePath,
+            'modifiedAtEpochMs': modifiedAt?.millisecondsSinceEpoch,
+            'createdAtEpochMs': createdAt?.millisecondsSinceEpoch,
+            'accessedAtEpochMs': accessedAt?.millisecondsSinceEpoch,
+          });
       return result ?? false;
     } on PlatformException {
       return false;
@@ -60,14 +78,21 @@ class OriginalLocationChannel {
     required String displayName,
     required String mimeType,
     required String sourcePath,
+    DateTime? modifiedAt,
+    DateTime? createdAt,
+    DateTime? accessedAt,
   }) async {
     try {
-      final result = await _mediaStoreChannel.invokeMethod<bool>('recreateInMediaStore', {
-        'relativePath': relativePath,
-        'displayName': displayName,
-        'mimeType': mimeType,
-        'sourcePath': sourcePath,
-      });
+      final result = await _mediaStoreChannel
+          .invokeMethod<bool>('recreateInMediaStore', {
+            'relativePath': relativePath,
+            'displayName': displayName,
+            'mimeType': mimeType,
+            'sourcePath': sourcePath,
+            'modifiedAtEpochMs': modifiedAt?.millisecondsSinceEpoch,
+            'createdAtEpochMs': createdAt?.millisecondsSinceEpoch,
+            'accessedAtEpochMs': accessedAt?.millisecondsSinceEpoch,
+          });
       return result ?? false;
     } on PlatformException {
       return false;
@@ -80,9 +105,10 @@ class OriginalLocationChannel {
   /// video can't be decoded.
   Future<Uint8List?> generateVideoThumbnail(String sourcePath) async {
     try {
-      return await _mediaStoreChannel.invokeMethod<Uint8List>('generateVideoThumbnail', {
-        'sourcePath': sourcePath,
-      });
+      return await _mediaStoreChannel.invokeMethod<Uint8List>(
+        'generateVideoThumbnail',
+        {'sourcePath': sourcePath},
+      );
     } on PlatformException {
       return null;
     }
@@ -95,11 +121,15 @@ class OriginalLocationChannel {
   /// tree's URI and the document's folder path relative to that tree.
   Future<TreeCoverage?> findCoveringTree(String documentUri) async {
     try {
-      final result = await _mediaStoreChannel.invokeMapMethod<String, String>('findCoveringTree', {
-        'uri': documentUri,
-      });
+      final result = await _mediaStoreChannel.invokeMapMethod<String, String>(
+        'findCoveringTree',
+        {'uri': documentUri},
+      );
       if (result == null) return null;
-      return TreeCoverage(treeUri: result['treeUri']!, relativeFolderPath: result['relativeFolderPath']!);
+      return TreeCoverage(
+        treeUri: result['treeUri']!,
+        relativeFolderPath: result['relativeFolderPath']!,
+      );
     } on PlatformException {
       return null;
     }
@@ -110,7 +140,9 @@ class OriginalLocationChannel {
   /// granted tree's URI, or null if the user cancelled or the grant failed.
   Future<String?> requestFolderAccess() async {
     try {
-      return await _mediaStoreChannel.invokeMethod<String>('requestFolderAccess');
+      return await _mediaStoreChannel.invokeMethod<String>(
+        'requestFolderAccess',
+      );
     } on PlatformException {
       return null;
     }
@@ -126,15 +158,22 @@ class OriginalLocationChannel {
     required String displayName,
     required String mimeType,
     required String sourcePath,
+    DateTime? modifiedAt,
+    DateTime? createdAt,
+    DateTime? accessedAt,
   }) async {
     try {
-      final result = await _mediaStoreChannel.invokeMethod<bool>('recreateInDocumentTree', {
-        'treeUri': treeUri,
-        'relativeFolderPath': relativeFolderPath,
-        'displayName': displayName,
-        'mimeType': mimeType,
-        'sourcePath': sourcePath,
-      });
+      final result = await _mediaStoreChannel
+          .invokeMethod<bool>('recreateInDocumentTree', {
+            'treeUri': treeUri,
+            'relativeFolderPath': relativeFolderPath,
+            'displayName': displayName,
+            'mimeType': mimeType,
+            'sourcePath': sourcePath,
+            'modifiedAtEpochMs': modifiedAt?.millisecondsSinceEpoch,
+            'createdAtEpochMs': createdAt?.millisecondsSinceEpoch,
+            'accessedAtEpochMs': accessedAt?.millisecondsSinceEpoch,
+          });
       return result ?? false;
     } on PlatformException {
       return false;

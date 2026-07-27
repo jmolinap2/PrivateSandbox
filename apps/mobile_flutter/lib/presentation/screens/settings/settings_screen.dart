@@ -6,7 +6,9 @@ import '../../../application/providers.dart';
 import '../../../domain/entities/auto_lock_timeout.dart';
 import '../backup/backup_screen.dart';
 import '../organization/organization_screen.dart';
+import '../sharing/encrypted_share_import_screen.dart';
 import '../storage/storage_screen.dart';
+import '../synchronization/sync_screen.dart';
 import '../trash/trash_screen.dart';
 import 'change_pin_screen.dart';
 
@@ -143,6 +145,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   subtitle: const Text('Exportar o restaurar la bóveda completa'),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const BackupScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.cloud_sync_outlined),
+                  title: const Text('Sincronización cifrada'),
+                  subtitle: const Text(
+                    'WebDAV, varios dispositivos y modo sólo local',
+                  ),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SyncScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.download_for_offline_outlined),
+                  title: const Text('Recibir contenido cifrado'),
+                  subtitle: const Text(
+                    'Importar un paquete o enlace temporal protegido',
+                  ),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const EncryptedShareImportScreen(),
+                    ),
                   ),
                 ),
                 ListTile(

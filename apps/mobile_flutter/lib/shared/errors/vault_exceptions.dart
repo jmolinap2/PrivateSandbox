@@ -25,6 +25,16 @@ class AuthException extends VaultException {
   const AuthException(super.message);
 }
 
+/// The app has durable evidence that a vault already exists, but the
+/// Keystore-backed master key is absent, malformed, or no longer matches it.
+/// Generating a replacement would make every existing blob permanently
+/// unreadable, so callers must stop and offer backup recovery instead.
+class KeyMaterialMissingException extends VaultException {
+  const KeyMaterialMissingException([
+    super.message = 'La clave maestra de esta bóveda no está disponible. Restaura una copia de seguridad.',
+  ]);
+}
+
 /// Raised when a long-running operation (currently an import) is aborted by
 /// the user partway through. Callers treat this as a clean cancellation —
 /// roll back partial state — rather than a failure to report.

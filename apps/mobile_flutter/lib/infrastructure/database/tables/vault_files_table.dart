@@ -22,6 +22,9 @@ class VaultFiles extends Table {
   TextColumn get originalTreeRelativePath => text().nullable()();
   DateTimeColumn get importedAt => dateTime()();
   DateTimeColumn get fileModifiedAt => dateTime().nullable()();
+  DateTimeColumn get originalCreatedAt => dateTime().nullable()();
+  DateTimeColumn get originalAccessedAt => dateTime().nullable()();
+  TextColumn get originalMetadataJson => text().nullable()();
   TextColumn get category => text()();
   TextColumn get status => text()();
   TextColumn get encryptedFileName => text()();

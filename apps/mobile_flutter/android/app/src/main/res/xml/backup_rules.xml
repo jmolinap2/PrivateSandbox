@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The vault has its own authenticated, password-protected portable backup.
+  Android Auto Backup cannot restore the Keystore key that protects secure
+  storage, so allowing framework backups would restore unreadable ciphertext
+  and could expose the plaintext metadata database.
+-->
+<full-backup-content>
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
+</full-backup-content>

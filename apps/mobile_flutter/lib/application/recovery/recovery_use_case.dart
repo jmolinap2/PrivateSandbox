@@ -1,31 +1,57 @@
-import 'dart:io';
-
-import 'package:path/path.dart' as p;
-
+import '../../domain/entities/import_status.dart';
 import '../../domain/repositories/vault_repository.dart';
-import '../../infrastructure/storage/vault_paths.dart';
+import '../import/active_import_registry.dart';
+import '../vault/vault_file_lifecycle.dart';
 
-/// Cleans up files left in [ImportStatus.importing] by a previous run that
-/// never reached the "verified and recorded" completion gate — deletes any
-/// partial ciphertext blob and the draft DB row, per the plan's
-/// "recuperación ante cierres inesperados durante una importación".
+/// Resolves imports interrupted at either side of the durable verification
+/// boundary.
+///
+/// Draft [ImportStatus.importing] records are safe to roll back because the
+/// source has not been deleted yet. [ImportStatus.verified] records are
+/// instead promoted conservatively: their authenticated blob is the copy that
+/// must survive even when the process died immediately after source deletion.
 class RecoveryUseCase {
   final VaultRepository _vaultRepository;
+  final VaultFileLifecycle _lifecycle;
 
-  RecoveryUseCase(this._vaultRepository);
+  RecoveryUseCase(this._vaultRepository, {VaultFileLifecycle? lifecycle})
+    : _lifecycle = lifecycle ?? VaultFileLifecycle(_vaultRepository);
 
   Future<int> recoverInterruptedImports() async {
     final interrupted = await _vaultRepository.getInterruptedImports();
-    if (interrupted.isEmpty) return 0;
-
-    final blobsDir = await VaultPaths.vaultBlobsDir();
+    var recovered = 0;
     for (final file in interrupted) {
-      final blob = File(p.join(blobsDir.path, file.encryptedFileName));
-      if (await blob.exists()) {
-        await blob.delete();
+      if (ActiveImportRegistry.contains(file.id)) continue;
+      try {
+        switch (file.status) {
+          case ImportStatus.importing:
+            // Metadata first: if this commit fails, leave all bytes intact.
+            await _lifecycle.deleteRecordThenArtifacts(file);
+            recovered++;
+            break;
+          case ImportStatus.verified:
+            if (!await _lifecycle.hasCompleteCiphertext(file)) {
+              // Preserve the record for diagnostics/retry. Deleting it could
+              // lose the only location metadata for an already-removed source.
+              continue;
+            }
+            await _vaultRepository.completeImport(
+              id: file.id,
+              sha256Hash: file.sha256Hash,
+              originalDeleted: false,
+            );
+            recovered++;
+            break;
+          case ImportStatus.completed:
+            // getInterruptedImports must not return this state, but treating
+            // it as a no-op makes recovery robust to repository changes.
+            continue;
+        }
+      } catch (_) {
+        // One damaged entry must not prevent recovery of independent files.
       }
-      await _vaultRepository.deleteFile(file.id);
     }
-    return interrupted.length;
+    await _lifecycle.cleanupOrphanedBlobs();
+    return recovered;
   }
 }

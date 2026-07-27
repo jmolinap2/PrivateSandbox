@@ -37,9 +37,11 @@ class VaultCollectionRepositoryImpl implements VaultCollectionRepository {
   }
 
   @override
-  Future<void> deleteCollection(String id) async {
-    await (_db.delete(_db.vaultCollectionFiles)..where((t) => t.collectionId.equals(id))).go();
-    await (_db.delete(_db.vaultCollections)..where((t) => t.id.equals(id))).go();
+  Future<void> deleteCollection(String id) {
+    return _db.transaction(() async {
+      await (_db.delete(_db.vaultCollectionFiles)..where((t) => t.collectionId.equals(id))).go();
+      await (_db.delete(_db.vaultCollections)..where((t) => t.id.equals(id))).go();
+    });
   }
 
   @override

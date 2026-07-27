@@ -13,6 +13,10 @@ abstract interface class VaultRepository {
 
   Future<VaultFile?> getById(String id);
 
+  /// Includes active, trashed and interrupted rows. Used before unlocking to
+  /// decide whether creating a new master key would be destructive.
+  Future<bool> hasStoredFiles();
+
   /// Files left in [ImportStatus.importing] by a previous run — candidates
   /// for cleanup by the recovery use case.
   Future<List<VaultFile>> getInterruptedImports();
@@ -20,6 +24,14 @@ abstract interface class VaultRepository {
   /// Registers a file as "importing" before any bytes are encrypted, so an
   /// interruption mid-import can be detected and cleaned up on next launch.
   Future<void> insertFile(VaultFile file);
+
+  /// Persists the verified content hash and advances the import to its
+  /// recoverable commit point. Once this succeeds, crash recovery must never
+  /// discard the ciphertext.
+  Future<void> markImportVerified({
+    required String id,
+    required String sha256Hash,
+  });
 
   /// Marks an import as finished once the ciphertext has been written and
   /// its integrity verified.

@@ -39,6 +39,19 @@ class VaultFile {
 
   final DateTime importedAt;
   final DateTime? fileModifiedAt;
+
+  /// Source timestamps captured before the original is removed. Android and
+  /// some document providers don't always allow restoring these values, so
+  /// they are retained as authoritative informational metadata even when the
+  /// exported file system can only accept [fileModifiedAt].
+  final DateTime? originalCreatedAt;
+  final DateTime? originalAccessedAt;
+
+  /// Versioned JSON object with source attributes that cannot be represented
+  /// portably by the public fields (provider, mode, original stat values,
+  /// platform-specific identifiers, and future metadata additions).
+  final String? originalMetadataJson;
+
   final FileCategory category;
   final ImportStatus status;
 
@@ -102,6 +115,9 @@ class VaultFile {
     this.originalTreeRelativePath,
     required this.importedAt,
     required this.fileModifiedAt,
+    this.originalCreatedAt,
+    this.originalAccessedAt,
+    this.originalMetadataJson,
     required this.category,
     required this.status,
     required this.encryptedFileName,
@@ -144,6 +160,9 @@ class VaultFile {
       originalTreeRelativePath: originalTreeRelativePath,
       importedAt: importedAt,
       fileModifiedAt: fileModifiedAt,
+      originalCreatedAt: originalCreatedAt,
+      originalAccessedAt: originalAccessedAt,
+      originalMetadataJson: originalMetadataJson,
       category: category,
       status: status ?? this.status,
       encryptedFileName: encryptedFileName,
