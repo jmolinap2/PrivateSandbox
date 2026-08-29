@@ -10,6 +10,7 @@ import '../screens/auth/splash_screen.dart';
 import '../screens/viewer/viewer_screen.dart';
 import 'app_routes.dart';
 import 'app_shell.dart';
+import 'route_observers.dart';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = ValueNotifier(ref.read(authControllerProvider));
@@ -20,6 +21,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: AppRoutes.splash,
+    observers: [vaultRouteObserver],
     refreshListenable: refreshNotifier,
     // Each lock state owns exactly one "resting" location, checked
     // independently — a previous version grouped pin-setup and pin-unlock
@@ -38,24 +40,39 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         case LockState.locked:
           return location == AppRoutes.pinUnlock ? null : AppRoutes.pinUnlock;
         case LockState.unlocked:
-          final isAuthRoute = location == AppRoutes.splash ||
+          final isAuthRoute =
+              location == AppRoutes.splash ||
               location == AppRoutes.pinSetup ||
               location == AppRoutes.pinUnlock;
           return isAuthRoute ? AppRoutes.gallery : null;
       }
     },
     routes: [
-      GoRoute(path: AppRoutes.splash, builder: (context, state) => const SplashScreen()),
-      GoRoute(path: AppRoutes.pinSetup, builder: (context, state) => const PinSetupScreen()),
-      GoRoute(path: AppRoutes.pinUnlock, builder: (context, state) => const PinUnlockScreen()),
-      GoRoute(path: AppRoutes.gallery, builder: (context, state) => const AppShell()),
+      GoRoute(
+        path: AppRoutes.splash,
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.pinSetup,
+        builder: (context, state) => const PinSetupScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.pinUnlock,
+        builder: (context, state) => const PinUnlockScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.gallery,
+        builder: (context, state) => const AppShell(),
+      ),
       GoRoute(
         path: '${AppRoutes.viewer}/:id',
         // `extra` carries the ordered ids of the list the file was opened from,
         // so video/audio players can use them as a playback queue.
         builder: (context, state) => ViewerScreen(
           fileId: state.pathParameters['id']!,
-          queueIds: state.extra is List<String> ? state.extra as List<String> : null,
+          queueIds: state.extra is List<String>
+              ? state.extra as List<String>
+              : null,
         ),
       ),
     ],

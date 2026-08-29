@@ -172,7 +172,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.restart_alt_outlined),
                   title: const Text('Restablecer preguntas de importación'),
-                  subtitle: const Text('Vuelve a preguntar "Eliminar originales" y "Acceso a carpeta"'),
+                  subtitle: const Text('Vuelve a preguntar "Eliminar originales"'),
                   onTap: () async {
                     await ref.read(importPreferencesProvider).resetAll();
                     if (!context.mounted) return;

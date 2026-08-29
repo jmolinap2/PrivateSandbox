@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../application/import/picked_file.dart';
 import '../../../application/providers.dart';
-import 'folder_access_prompt.dart';
+import 'folder_access_resolver.dart';
 import 'gallery_picker_screen.dart';
 import 'import_sheet.dart';
 import 'import_source_sheet.dart';
@@ -47,16 +47,13 @@ Future<void> pickAndImportFiles(BuildContext context, WidgetRef ref) async {
   if (!context.mounted) return;
 
   // Only explorer-sourced files whose original is about to be deleted need
-  // folder-tree access resolved — gallery picks use MediaStore's relative
+  // a folder-tree grant resolved — gallery picks use MediaStore's relative
   // path instead, and kept originals can still be restored via their own
-  // document URI, so neither needs it.
+  // document URI, so neither needs it. This only reuses a grant the app
+  // already holds; it never prompts (see folder_access_resolver.dart), so
+  // it's safe to run silently over the whole batch here.
   if (confirmed) {
-    final resolved = <PickedFile>[];
-    for (final file in files) {
-      if (!context.mounted) return;
-      resolved.add(await resolveFolderAccessIfNeeded(context, ref, file));
-    }
-    files = resolved;
+    files = [for (final file in files) await resolveFolderAccessIfNeeded(ref, file)];
   }
   if (!context.mounted) return;
 

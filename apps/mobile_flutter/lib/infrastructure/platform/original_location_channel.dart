@@ -115,10 +115,11 @@ class OriginalLocationChannel {
   }
 
   /// Checks whether the app already holds a persisted folder-tree grant
-  /// covering [documentUri] (from a past [requestFolderAccess] call, this
-  /// session or an earlier one — Android remembers these across restarts).
-  /// Returns null if no granted tree covers it; otherwise the covering
-  /// tree's URI and the document's folder path relative to that tree.
+  /// covering [documentUri] — granted at some point, by this app or through
+  /// Android's own document-tree UI, this session or an earlier one
+  /// (Android remembers these across restarts). Returns null if no granted
+  /// tree covers it; otherwise the covering tree's URI and the document's
+  /// folder path relative to that tree.
   Future<TreeCoverage?> findCoveringTree(String documentUri) async {
     try {
       final result = await _mediaStoreChannel.invokeMapMethod<String, String>(
@@ -129,19 +130,6 @@ class OriginalLocationChannel {
       return TreeCoverage(
         treeUri: result['treeUri']!,
         relativeFolderPath: result['relativeFolderPath']!,
-      );
-    } on PlatformException {
-      return null;
-    }
-  }
-
-  /// Launches the system folder picker (`ACTION_OPEN_DOCUMENT_TREE`) and, if
-  /// the user picks one, persists read/write access to it. Returns the
-  /// granted tree's URI, or null if the user cancelled or the grant failed.
-  Future<String?> requestFolderAccess() async {
-    try {
-      return await _mediaStoreChannel.invokeMethod<String>(
-        'requestFolderAccess',
       );
     } on PlatformException {
       return null;

@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/providers.dart';
 import '../../../domain/entities/vault_file.dart';
 import '../../../media_engine/abstractions/video_engine.dart';
+import '../../navigation/route_observers.dart';
+import '../../playback/playback_visibility_controller.dart';
 import 'decrypted_playback_view.dart';
 import 'restore_action.dart';
 import 'share_action.dart';
@@ -17,7 +19,11 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
   /// collection/album/library view). Empty means "just this one file".
   final List<VaultFile> queue;
 
-  const VideoPlayerScreen({super.key, required this.file, this.queue = const []});
+  const VideoPlayerScreen({
+    super.key,
+    required this.file,
+    this.queue = const [],
+  });
 
   @override
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
@@ -100,10 +106,13 @@ class _VideoBody extends ConsumerStatefulWidget {
   ConsumerState<_VideoBody> createState() => _VideoBodyState();
 }
 
-class _VideoBodyState extends ConsumerState<_VideoBody> {
+class _VideoBodyState extends ConsumerState<_VideoBody>
+    with WidgetsBindingObserver, RouteAware {
   static const _speeds = [0.5, 1.0, 1.25, 1.5, 2.0];
 
   late final VideoEngine _engine;
+  late final PlaybackVisibilityController _visibility;
+  ModalRoute<dynamic>? _route;
   bool _ready = false;
   double _speed = 1.0;
   double _volume = 1.0;
@@ -124,7 +133,9 @@ class _VideoBodyState extends ConsumerState<_VideoBody> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _engine = ref.read(videoEngineFactoryProvider)();
+    _visibility = PlaybackVisibilityController(_pausePlayback);
     ref.read(systemChannelProvider).getScreenBrightness().then((value) {
       if (mounted) setState(() => _brightness = value);
     });
@@ -135,13 +146,61 @@ class _VideoBodyState extends ConsumerState<_VideoBody> {
       final duration = _engine.value.duration;
       // Don't resume if the saved position is within the last 5s — that
       // usually means the video already finished.
-      if (resumeMs != null && resumeMs > 0 && duration.inMilliseconds - resumeMs > 5000) {
+      if (resumeMs != null &&
+          resumeMs > 0 &&
+          duration.inMilliseconds - resumeMs > 5000) {
         await _engine.seekTo(Duration(milliseconds: resumeMs));
       }
       if (!mounted) return;
       setState(() => _ready = true);
-      _engine.play();
+      if (_visibility.canStartAutomatically) {
+        await _engine.play();
+      }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextRoute = ModalRoute.of(context);
+    if (identical(_route, nextRoute)) return;
+    if (_route != null) vaultRouteObserver.unsubscribe(this);
+    _route = nextRoute;
+    _visibility.setRouteVisible(nextRoute?.isCurrent ?? true);
+    if (nextRoute != null) vaultRouteObserver.subscribe(this, nextRoute);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _visibility.setAppVisible(state == AppLifecycleState.resumed);
+  }
+
+  @override
+  void didPush() {
+    _visibility.setRouteVisible(true);
+  }
+
+  @override
+  void didPushNext() {
+    _visibility.setRouteVisible(false);
+  }
+
+  @override
+  void didPopNext() {
+    _visibility.setRouteVisible(true);
+    // Deliberately do not resume automatically. Returning to a video should
+    // require an explicit tap from the user.
+  }
+
+  @override
+  void didPop() {
+    _visibility.setRouteVisible(false);
+  }
+
+  void _pausePlayback() {
+    if (_engine.value.isPlaying) {
+      _engine.pause();
+    }
   }
 
   void _onEngineTick() {
@@ -154,10 +213,16 @@ class _VideoBodyState extends ConsumerState<_VideoBody> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    vaultRouteObserver.unsubscribe(this);
+    _visibility.stop();
     _engine.removeListener(_onEngineTick);
     ref
         .read(vaultRepositoryProvider)
-        .recordOpened(widget.vaultFile.id, playbackPositionMs: _engine.value.position.inMilliseconds);
+        .recordOpened(
+          widget.vaultFile.id,
+          playbackPositionMs: _engine.value.position.inMilliseconds,
+        );
     // Hand brightness control back to the system so the vault doesn't leave
     // the whole device dimmed after the player closes.
     ref.read(systemChannelProvider).clearScreenBrightness();
@@ -186,9 +251,13 @@ class _VideoBodyState extends ConsumerState<_VideoBody> {
   }
 
   Future<void> _onHorizontalDragEnd(DragEndDetails details) async {
-    final target = _engine.value.position + Duration(milliseconds: (_seekDeltaSeconds * 1000).round());
+    final target =
+        _engine.value.position +
+        Duration(milliseconds: (_seekDeltaSeconds * 1000).round());
     final duration = _engine.value.duration;
-    final clamped = target < Duration.zero ? Duration.zero : (target > duration ? duration : target);
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (target > duration ? duration : target);
     await _engine.seekTo(clamped);
     if (!mounted) return;
     setState(() {
@@ -238,7 +307,9 @@ class _VideoBodyState extends ConsumerState<_VideoBody> {
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     }
     return Center(
       child: AspectRatio(
@@ -259,14 +330,21 @@ class _VideoBodyState extends ConsumerState<_VideoBody> {
                 animation: _engine,
                 builder: (context, _) => _engine.value.isPlaying
                     ? const SizedBox.shrink()
-                    : const Icon(Icons.play_arrow, size: 64, color: Colors.white70),
+                    : const Icon(
+                        Icons.play_arrow,
+                        size: 64,
+                        color: Colors.white70,
+                      ),
               ),
               if (_isSeeking)
                 Positioned.fill(
                   child: Center(
                     child: _Badge(
-                      icon: _seekDeltaSeconds >= 0 ? Icons.fast_forward : Icons.fast_rewind,
-                      label: '${_seekDeltaSeconds >= 0 ? '+' : ''}${_seekDeltaSeconds.round()}s',
+                      icon: _seekDeltaSeconds >= 0
+                          ? Icons.fast_forward
+                          : Icons.fast_rewind,
+                      label:
+                          '${_seekDeltaSeconds >= 0 ? '+' : ''}${_seekDeltaSeconds.round()}s',
                     ),
                   ),
                 ),
@@ -295,9 +373,14 @@ class _VideoBodyState extends ConsumerState<_VideoBody> {
                   initialValue: _speed,
                   onSelected: _setSpeed,
                   itemBuilder: (context) => [
-                    for (final speed in _speeds) PopupMenuItem(value: speed, child: Text('${speed}x')),
+                    for (final speed in _speeds)
+                      PopupMenuItem(value: speed, child: Text('${speed}x')),
                   ],
-                  child: _Badge(icon: Icons.speed, label: '${_speed}x', compact: true),
+                  child: _Badge(
+                    icon: Icons.speed,
+                    label: '${_speed}x',
+                    compact: true,
+                  ),
                 ),
               ),
               _Controls(
@@ -351,7 +434,10 @@ class _Controls extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.skip_previous, color: Colors.white),
+                      icon: const Icon(
+                        Icons.skip_previous,
+                        color: Colors.white,
+                      ),
                       onPressed: hasPrevious ? onPrevious : null,
                       disabledColor: Colors.white24,
                     ),
@@ -364,16 +450,25 @@ class _Controls extends StatelessWidget {
                 ),
               Row(
                 children: [
-                  Text(format(value.position), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  Text(
+                    format(value.position),
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
                   Expanded(
                     child: Slider(
                       min: 0,
                       max: durationMs > 0 ? durationMs.toDouble() : 1,
-                      value: value.position.inMilliseconds.clamp(0, durationMs > 0 ? durationMs : 1).toDouble(),
-                      onChanged: (v) => engine.seekTo(Duration(milliseconds: v.toInt())),
+                      value: value.position.inMilliseconds
+                          .clamp(0, durationMs > 0 ? durationMs : 1)
+                          .toDouble(),
+                      onChanged: (v) =>
+                          engine.seekTo(Duration(milliseconds: v.toInt())),
                     ),
                   ),
-                  Text(format(value.duration), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  Text(
+                    format(value.duration),
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
                 ],
               ),
             ],
@@ -399,7 +494,10 @@ class _Badge extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 16, vertical: compact ? 6 : 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 16,
+          vertical: compact ? 6 : 10,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

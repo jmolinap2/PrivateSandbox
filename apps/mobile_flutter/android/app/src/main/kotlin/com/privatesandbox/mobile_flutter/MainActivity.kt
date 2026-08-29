@@ -43,9 +43,6 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingDeleteResult: MethodChannel.Result? = null
     private lateinit var deleteRequestLauncher: ActivityResultLauncher<IntentSenderRequest>
 
-    private var pendingFolderAccessResult: MethodChannel.Result? = null
-    private lateinit var folderAccessLauncher: ActivityResultLauncher<Intent>
-
     override fun onCreate(savedInstanceState: Bundle?) {
         // Blocks screenshots/screen recording of this app, and — as the same
         // flag's side effect — makes the system show a blank thumbnail for
@@ -60,12 +57,6 @@ class MainActivity : FlutterFragmentActivity() {
             registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { activityResult ->
                 pendingDeleteResult?.success(activityResult.resultCode == RESULT_OK)
                 pendingDeleteResult = null
-            }
-        folderAccessLauncher =
-            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { activityResult ->
-                val treeUri = if (activityResult.resultCode == RESULT_OK) activityResult.data?.data else null
-                pendingFolderAccessResult?.success(if (treeUri == null) null else takeTreePermission(treeUri))
-                pendingFolderAccessResult = null
             }
         super.onCreate(savedInstanceState)
     }
@@ -139,10 +130,6 @@ class MainActivity : FlutterFragmentActivity() {
                         } else {
                             result.success(findCoveringTree(uriString))
                         }
-                    }
-                    "requestFolderAccess" -> {
-                        pendingFolderAccessResult = result
-                        folderAccessLauncher.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
                     }
                     "recreateInDocumentTree" -> {
                         val treeUri = call.argument<String>("treeUri")
@@ -300,23 +287,11 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /** Persists read/write access to [treeUri] and returns it as a string, or null on failure. */
-    private fun takeTreePermission(treeUri: Uri): String? {
-        return try {
-            contentResolver.takePersistableUriPermission(
-                treeUri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-            )
-            treeUri.toString()
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     /**
      * Checks whether the app already holds a persisted folder-tree grant
-     * (from a previous [requestFolderAccess] call, this session or a past
-     * one) covering [documentUriString] — Android tracks these grants
+     * (granted at some point — by this app or through Android's own
+     * document-tree UI, this session or a past one) covering
+     * [documentUriString] — Android tracks these grants
      * itself via [android.content.ContentResolver.getPersistedUriPermissions],
      * so there's no separate cache to keep in sync. Returns the covering
      * tree URI and the document's folder path relative to that tree's root
