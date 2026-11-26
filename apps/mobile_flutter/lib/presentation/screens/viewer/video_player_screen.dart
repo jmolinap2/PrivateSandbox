@@ -151,6 +151,7 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
   late final PlaybackVisibilityController _visibility;
   ModalRoute<dynamic>? _route;
   bool _ready = false;
+  bool _initializationFailed = false;
   double _speed = 1.0;
   double _volume = 1.0;
   double _brightness = 0.5;
@@ -183,24 +184,29 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
       if (mounted) setState(() => _brightness = value);
     });
     _engine.addListener(_onEngineTick);
-    _engine.initialize(widget.decryptedFile).then((_) async {
-      if (!mounted) return;
-      final resumeMs = widget.vaultFile.playbackPositionMs;
-      final duration = _engine.value.duration;
-      // Don't resume if the saved position is within the last 5s — that
-      // usually means the video already finished.
-      if (resumeMs != null &&
-          resumeMs > 0 &&
-          duration.inMilliseconds - resumeMs > 5000) {
-        await _engine.seekTo(Duration(milliseconds: resumeMs));
-      }
-      if (!mounted) return;
-      setState(() => _ready = true);
-      if (_visibility.canStartAutomatically) {
-        await _engine.play();
-        _scheduleHideControls();
-      }
-    });
+    _engine
+        .initialize(widget.decryptedFile)
+        .then((_) async {
+          if (!mounted) return;
+          final resumeMs = widget.vaultFile.playbackPositionMs;
+          final duration = _engine.value.duration;
+          // Don't resume if the saved position is within the last 5s — that
+          // usually means the video already finished.
+          if (resumeMs != null &&
+              resumeMs > 0 &&
+              duration.inMilliseconds - resumeMs > 5000) {
+            await _engine.seekTo(Duration(milliseconds: resumeMs));
+          }
+          if (!mounted) return;
+          setState(() => _ready = true);
+          if (_visibility.canStartAutomatically) {
+            await _engine.play();
+            _scheduleHideControls();
+          }
+        })
+        .catchError((Object error) {
+          if (mounted) setState(() => _initializationFailed = true);
+        });
   }
 
   @override
@@ -317,10 +323,23 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
     _engine.setPlaybackSpeed(speed);
   }
 
+  Future<void> _seekBy(int seconds) async {
+    final target = _engine.value.position + Duration(seconds: seconds);
+    final duration = _engine.value.duration;
+    await _engine.seekTo(
+      target < Duration.zero
+          ? Duration.zero
+          : (target > duration ? duration : target),
+    );
+    _scheduleHideControls();
+  }
+
   Future<void> _onDoubleTapDown(TapDownDetails details) async {
     final width = MediaQuery.of(context).size.width;
     final isForward = details.globalPosition.dx > width / 2;
-    final delta = Duration(seconds: isForward ? _seekStepSeconds : -_seekStepSeconds);
+    final delta = Duration(
+      seconds: isForward ? _seekStepSeconds : -_seekStepSeconds,
+    );
     final target = _engine.value.position + delta;
     final duration = _engine.value.duration;
     final clamped = target < Duration.zero
@@ -329,7 +348,9 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
     await _engine.seekTo(clamped);
     if (!mounted) return;
     _doubleTapBadgeTimer?.cancel();
-    setState(() => _doubleTapIcon = isForward ? Icons.forward_10 : Icons.replay_10);
+    setState(
+      () => _doubleTapIcon = isForward ? Icons.forward_10 : Icons.replay_10,
+    );
     _doubleTapBadgeTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted) setState(() => _doubleTapIcon = null);
     });
@@ -397,142 +418,187 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
   String _format(Duration d) {
     final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
+    final hours = d.inHours;
+    return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_initializationFailed) {
+      return const Center(
+        child: Text(
+          'No se pudo reproducir este video.',
+          style: TextStyle(color: Colors.white),
+        ),
+      );
+    }
     if (!_ready) {
       return const Center(
         child: CircularProgressIndicator(color: Colors.white),
       );
     }
-    return Center(
-      child: AspectRatio(
-        aspectRatio: _engine.value.aspectRatio,
-        child: GestureDetector(
-          onTap: _onTapVideo,
-          onDoubleTapDown: _onDoubleTapDown,
-          onHorizontalDragStart: _onHorizontalDragStart,
-          onHorizontalDragUpdate: _onHorizontalDragUpdate,
-          onHorizontalDragEnd: _onHorizontalDragEnd,
-          onVerticalDragStart: _onVerticalDragStart,
-          onVerticalDragUpdate: _onVerticalDragUpdate,
-          onVerticalDragEnd: _onVerticalDragEnd,
-          child: Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              _engine.buildSurface(),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 150),
-                child: _engine.value.isPlaying
-                    ? const SizedBox.shrink()
-                    : const Icon(
-                        Icons.play_arrow,
-                        key: ValueKey('paused-icon'),
-                        size: 64,
-                        color: Colors.white70,
-                      ),
+    return SizedBox.expand(
+      child: GestureDetector(
+        onTap: _onTapVideo,
+        onDoubleTapDown: _onDoubleTapDown,
+        onHorizontalDragStart: _onHorizontalDragStart,
+        onHorizontalDragUpdate: _onHorizontalDragUpdate,
+        onHorizontalDragEnd: _onHorizontalDragEnd,
+        onVerticalDragStart: _onVerticalDragStart,
+        onVerticalDragUpdate: _onVerticalDragUpdate,
+        onVerticalDragEnd: _onVerticalDragEnd,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            Center(
+              child: AspectRatio(
+                aspectRatio: _engine.value.aspectRatio,
+                child: _engine.buildSurface(),
               ),
-              if (_doubleTapIcon != null)
-                Positioned.fill(
-                  child: Center(
-                    child: AnimatedOpacity(
-                      opacity: _doubleTapIcon != null ? 1 : 0,
-                      duration: const Duration(milliseconds: 150),
-                      child: _Badge(icon: _doubleTapIcon!, label: '${_seekStepSeconds}s'),
-                    ),
-                  ),
-                ),
-              if (_isSeeking)
-                Positioned.fill(
-                  child: Center(
+            ),
+            if (_doubleTapIcon != null)
+              Positioned.fill(
+                child: Center(
+                  child: AnimatedOpacity(
+                    opacity: _doubleTapIcon != null ? 1 : 0,
+                    duration: const Duration(milliseconds: 150),
                     child: _Badge(
-                      icon: _seekDeltaSeconds >= 0
-                          ? Icons.fast_forward
-                          : Icons.fast_rewind,
-                      label:
-                          '${_seekDeltaSeconds >= 0 ? '+' : ''}${_seekDeltaSeconds.round()}s',
+                      icon: _doubleTapIcon!,
+                      label: '${_seekStepSeconds}s',
                     ),
                   ),
                 ),
-              if (_isAdjustingVolume)
-                Positioned.fill(
-                  child: Center(
-                    child: _Badge(
-                      icon: _volume == 0 ? Icons.volume_off : Icons.volume_up,
-                      label: '${(_volume * 100).round()}%',
-                    ),
+              ),
+            if (_isSeeking)
+              Positioned.fill(
+                child: Center(
+                  child: _Badge(
+                    icon: _seekDeltaSeconds >= 0
+                        ? Icons.fast_forward
+                        : Icons.fast_rewind,
+                    label:
+                        '${_seekDeltaSeconds >= 0 ? '+' : ''}${_seekDeltaSeconds.round()}s',
                   ),
                 ),
-              if (_isAdjustingBrightness)
-                Positioned.fill(
-                  child: Center(
-                    child: _Badge(
-                      icon: Icons.brightness_6,
-                      label: '${(_brightness * 100).round()}%',
-                    ),
+              ),
+            if (_isAdjustingVolume)
+              Positioned.fill(
+                child: Center(
+                  child: _Badge(
+                    icon: _volume == 0 ? Icons.volume_off : Icons.volume_up,
+                    label: '${(_volume * 100).round()}%',
                   ),
                 ),
-              IgnorePointer(
-                ignoring: !_controlsVisible,
-                child: AnimatedOpacity(
-                  opacity: _controlsVisible ? 1 : 0,
-                  duration: const Duration(milliseconds: 250),
-                  child: Stack(
-                    alignment: Alignment.bottomCenter,
-                    children: [
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Row(
+              ),
+            if (_isAdjustingBrightness)
+              Positioned.fill(
+                child: Center(
+                  child: _Badge(
+                    icon: Icons.brightness_6,
+                    label: '${(_brightness * 100).round()}%',
+                  ),
+                ),
+              ),
+            IgnorePointer(
+              ignoring: !_controlsVisible,
+              child: AnimatedOpacity(
+                opacity: _controlsVisible ? 1 : 0,
+                duration: const Duration(milliseconds: 250),
+                child: Stack(
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    Center(
+                      child: AnimatedBuilder(
+                        animation: _engine,
+                        builder: (context, _) => Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            PopupMenuButton<double>(
-                              initialValue: _speed,
-                              onSelected: _setSpeed,
-                              itemBuilder: (context) => [
-                                for (final speed in _speeds)
-                                  PopupMenuItem(value: speed, child: Text('${speed}x')),
-                              ],
-                              child: _Badge(
-                                icon: Icons.speed,
-                                label: '${_speed}x',
-                                compact: true,
+                            IconButton(
+                              tooltip: 'Retroceder 10 segundos',
+                              color: Colors.white,
+                              iconSize: 36,
+                              onPressed: () => _seekBy(-10),
+                              icon: const Icon(Icons.replay_10),
+                            ),
+                            IconButton(
+                              tooltip: _engine.value.isPlaying
+                                  ? 'Pausar'
+                                  : 'Reproducir',
+                              color: Colors.white,
+                              iconSize: 56,
+                              onPressed: _togglePlayback,
+                              icon: Icon(
+                                _engine.value.isPlaying
+                                    ? Icons.pause_circle
+                                    : Icons.play_circle,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: widget.onToggleFullscreen,
-                              child: _Badge(
-                                icon: widget.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                                label: '',
-                                compact: true,
-                              ),
+                            IconButton(
+                              tooltip: 'Adelantar 10 segundos',
+                              color: Colors.white,
+                              iconSize: 36,
+                              onPressed: () => _seekBy(10),
+                              icon: const Icon(Icons.forward_10),
                             ),
                           ],
                         ),
                       ),
-                      _Controls(
-                        engine: _engine,
-                        format: _format,
-                        hasPrevious: widget.hasPrevious,
-                        hasNext: widget.hasNext,
-                        onPrevious: widget.onPrevious,
-                        onNext: widget.onNext,
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Row(
+                        children: [
+                          PopupMenuButton<double>(
+                            initialValue: _speed,
+                            onSelected: _setSpeed,
+                            itemBuilder: (context) => [
+                              for (final speed in _speeds)
+                                PopupMenuItem(
+                                  value: speed,
+                                  child: Text('${speed}x'),
+                                ),
+                            ],
+                            child: _Badge(
+                              icon: Icons.speed,
+                              label: '${_speed}x',
+                              compact: true,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: widget.onToggleFullscreen,
+                            child: _Badge(
+                              icon: widget.isFullscreen
+                                  ? Icons.fullscreen_exit
+                                  : Icons.fullscreen,
+                              label: '',
+                              compact: true,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    _Controls(
+                      engine: _engine,
+                      format: _format,
+                      hasPrevious: widget.hasPrevious,
+                      hasNext: widget.hasNext,
+                      onPrevious: widget.onPrevious,
+                      onNext: widget.onNext,
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _Controls extends StatelessWidget {
+class _Controls extends StatefulWidget {
   const _Controls({
     required this.engine,
     required this.format,
@@ -550,7 +616,18 @@ class _Controls extends StatelessWidget {
   final VoidCallback? onNext;
 
   @override
+  State<_Controls> createState() => _ControlsState();
+}
+
+class _ControlsState extends State<_Controls> {
+  double? _dragValue;
+
+  @override
   Widget build(BuildContext context) {
+    final engine = widget.engine;
+    final hasPrevious = widget.hasPrevious;
+    final hasNext = widget.hasNext;
+    final format = widget.format;
     final showQueueControls = hasPrevious || hasNext;
     return AnimatedBuilder(
       animation: engine,
@@ -571,12 +648,12 @@ class _Controls extends StatelessWidget {
                         Icons.skip_previous,
                         color: Colors.white,
                       ),
-                      onPressed: hasPrevious ? onPrevious : null,
+                      onPressed: hasPrevious ? widget.onPrevious : null,
                       disabledColor: Colors.white24,
                     ),
                     IconButton(
                       icon: const Icon(Icons.skip_next, color: Colors.white),
-                      onPressed: hasNext ? onNext : null,
+                      onPressed: hasNext ? widget.onNext : null,
                       disabledColor: Colors.white24,
                     ),
                   ],
@@ -591,11 +668,20 @@ class _Controls extends StatelessWidget {
                     child: Slider(
                       min: 0,
                       max: durationMs > 0 ? durationMs.toDouble() : 1,
-                      value: value.position.inMilliseconds
-                          .clamp(0, durationMs > 0 ? durationMs : 1)
-                          .toDouble(),
-                      onChanged: (v) =>
-                          engine.seekTo(Duration(milliseconds: v.toInt())),
+                      value:
+                          (_dragValue ??
+                                  value.position.inMilliseconds.toDouble())
+                              .clamp(
+                                0,
+                                durationMs > 0 ? durationMs.toDouble() : 1.0,
+                              ),
+                      onChanged: durationMs > 0
+                          ? (v) => setState(() => _dragValue = v)
+                          : null,
+                      onChangeEnd: (v) {
+                        engine.seekTo(Duration(milliseconds: v.round()));
+                        setState(() => _dragValue = null);
+                      },
                     ),
                   ),
                   Text(

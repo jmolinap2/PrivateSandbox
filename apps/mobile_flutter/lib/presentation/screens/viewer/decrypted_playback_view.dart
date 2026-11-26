@@ -13,10 +13,15 @@ class DecryptedPlaybackView extends ConsumerStatefulWidget {
   final VaultFile file;
   final Widget Function(BuildContext context, File decryptedFile) builder;
 
-  const DecryptedPlaybackView({super.key, required this.file, required this.builder});
+  const DecryptedPlaybackView({
+    super.key,
+    required this.file,
+    required this.builder,
+  });
 
   @override
-  ConsumerState<DecryptedPlaybackView> createState() => _DecryptedPlaybackViewState();
+  ConsumerState<DecryptedPlaybackView> createState() =>
+      _DecryptedPlaybackViewState();
 }
 
 class _DecryptedPlaybackViewState extends ConsumerState<DecryptedPlaybackView> {
@@ -30,9 +35,14 @@ class _DecryptedPlaybackViewState extends ConsumerState<DecryptedPlaybackView> {
   }
 
   Future<void> _load() async {
+    final playback = ref.read(playbackUseCaseProvider);
     try {
-      final file = await ref.read(playbackUseCaseProvider).decryptToTemp(widget.file);
-      if (mounted) setState(() => _decryptedFile = file);
+      final file = await playback.decryptToTemp(widget.file);
+      if (mounted) {
+        setState(() => _decryptedFile = file);
+      } else {
+        await playback.cleanupTemp(file);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
