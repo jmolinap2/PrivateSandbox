@@ -21,7 +21,7 @@ class AvailableUpdate {
 /// needed; unauthenticated API calls allow 60/hour per IP, plenty here).
 ///
 /// Releases are tagged `build-N`, where N is the git commit count that
-/// `release.sh` also uses as the APK's versionCode, so "newer" is simply
+/// the release workflow also uses as the APK's versionCode, so "newer" is simply
 /// N > installed versionCode.
 class AppUpdateService {
   static const repository = 'jmolinap2/PrivateSandbox';
