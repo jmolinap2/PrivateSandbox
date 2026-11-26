@@ -64,7 +64,16 @@ class _DecryptedPlaybackViewState extends ConsumerState<DecryptedPlaybackView> {
     }
     final decrypted = _decryptedFile;
     if (decrypted == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Preparando archivo...'),
+          ],
+        ),
+      );
     }
     return widget.builder(context, decrypted);
   }
