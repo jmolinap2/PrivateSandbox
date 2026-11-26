@@ -53,6 +53,14 @@ jobs:
           test -n "$KEYSTORE_B64" || { echo "Falta el secreto ANDROID_DEBUG_KEYSTORE_B64"; exit 1; }
           mkdir -p ~/.android
           echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+          # Que Gradle use exactamente este keystore y no otro.
+          echo "ANDROID_USER_HOME=$HOME/.android" >> "$GITHUB_ENV"
+          keytool -list -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey >/dev/null ||
+            { echo "::error::El secreto ANDROID_DEBUG_KEYSTORE_B64 no contiene un keystore valido (se pego otra cosa?)"; exit 1; }
+          KEYSTORE_SHA256=$(keytool -list -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey |
+            sed -n 's/^.*SHA256: //p' | tr -d ':' | tr 'A-Z' 'a-z')
+          echo "KEYSTORE_SHA256=$KEYSTORE_SHA256" >> "$GITHUB_ENV"
+          echo "Huella del keystore del secreto: $KEYSTORE_SHA256"
 
       - name: Compilar
         working-directory: apps/mobile_flutter
@@ -73,6 +81,8 @@ jobs:
           test -n "$APKSIGNER" || { echo "No se encontró apksigner"; exit 1; }
           CERTIFICATE_SHA256=$($APKSIGNER verify --print-certs site/PrivateSandbox.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
           test -n "$CERTIFICATE_SHA256" || { echo "No se pudo leer el certificado del APK"; exit 1; }
+          test "$CERTIFICATE_SHA256" = "$KEYSTORE_SHA256" ||
+            { echo "::error::El APK quedo firmado con $CERTIFICATE_SHA256 y no con la clave del secreto ($KEYSTORE_SHA256): Android rechazaria la actualizacion."; exit 1; }
           jq -n \
             --argjson build "$BUILD" \
             --arg name "$NAME" \
