@@ -28,6 +28,7 @@ import '../infrastructure/encryption/key_manager.dart';
 import '../infrastructure/platform/original_location_channel.dart';
 import '../infrastructure/platform/system_channel.dart';
 import '../infrastructure/settings/import_preferences.dart';
+import '../infrastructure/update/app_update_service.dart';
 import '../infrastructure/synchronization/sync_configuration_store.dart';
 import '../media_engine/abstractions/audio_engine.dart';
 import '../media_engine/abstractions/video_engine.dart';
@@ -98,6 +99,10 @@ final originalLocationChannelProvider = Provider<OriginalLocationChannel>((
   ref,
 ) {
   return OriginalLocationChannel();
+});
+
+final appUpdateServiceProvider = Provider<AppUpdateService>((ref) {
+  return AppUpdateService();
 });
 
 final importPreferencesProvider = Provider<ImportPreferences>((ref) {

@@ -11,6 +11,7 @@ import '../../navigation/app_routes.dart';
 import '../../navigation/selected_tab_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/vault_thumbnail.dart';
+import '../../widgets/app_update_flow.dart';
 import '../import/import_flow.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -36,7 +37,7 @@ class HomeScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final filesAsync = ref.watch(vaultFilesStreamProvider);
 
-    return Scaffold(
+    return UpdateCheckOnStart(child: Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
@@ -185,7 +186,7 @@ class HomeScreen extends ConsumerWidget {
           );
         },
       ),
-    );
+    ));
   }
 }
 

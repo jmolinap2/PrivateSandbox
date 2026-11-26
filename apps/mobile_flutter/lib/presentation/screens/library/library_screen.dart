@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../application/library/library_filter.dart';
+import '../../../application/library/library_view_mode.dart';
 import '../../../domain/entities/file_category.dart';
 import '../../navigation/app_routes.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/vault_file_list_tile.dart';
+import '../../widgets/vault_file_tile.dart';
 import '../folders/folders_screen.dart';
 import '../import/import_flow.dart';
 
@@ -40,11 +42,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final filter = ref.watch(libraryFilterProvider);
     final files = ref.watch(filteredLibraryProvider);
     final notifier = ref.read(libraryFilterProvider.notifier);
+    final viewMode = ref.watch(libraryViewModeProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Biblioteca'),
         actions: [
+          IconButton(
+            icon: Icon(viewMode == LibraryViewMode.list ? Icons.grid_view_outlined : Icons.view_list_outlined),
+            tooltip: viewMode == LibraryViewMode.list ? 'Ver como cuadrícula' : 'Ver como lista',
+            onPressed: () => ref.read(libraryViewModeProvider.notifier).toggle(),
+          ),
           IconButton(
             icon: const Icon(Icons.folder_outlined),
             tooltip: 'Carpetas',
@@ -133,6 +141,25 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 : Builder(
                     builder: (context) {
                       final queueIds = [for (final f in files) f.id];
+                      if (viewMode == LibraryViewMode.grid) {
+                        return GridView.builder(
+                          padding: const EdgeInsets.all(12),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                            childAspectRatio: 0.75,
+                          ),
+                          itemCount: files.length,
+                          itemBuilder: (context, index) {
+                            final file = files[index];
+                            return VaultFileTile(
+                              file: file,
+                              onTap: () => context.push(AppRoutes.viewerFor(file.id), extra: queueIds),
+                            );
+                          },
+                        );
+                      }
                       return ListView.builder(
                         itemCount: files.length,
                         itemBuilder: (context, index) {

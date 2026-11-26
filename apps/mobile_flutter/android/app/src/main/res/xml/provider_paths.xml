@@ -5,4 +5,5 @@
      <cache-path> covers the decrypted temp files written there. -->
 <paths>
     <cache-path name="vault_share" path="vault_share/" />
+    <cache-path name="app_update" path="app_update/" />
 </paths>

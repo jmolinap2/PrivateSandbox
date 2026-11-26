@@ -190,9 +190,55 @@ class MainActivity : FlutterFragmentActivity() {
                             result.success(shareFile(sourcePath, mimeType, displayName))
                         }
                     }
+                    "getAppBuildNumber" -> result.success(getAppBuildNumber())
+                    "canInstallPackages" -> result.success(canInstallPackages())
+                    "openInstallPermissionSettings" -> {
+                        openInstallPermissionSettings()
+                        result.success(null)
+                    }
+                    "installApk" -> {
+                        val sourcePath = call.argument<String>("sourcePath")
+                        if (sourcePath.isNullOrEmpty()) {
+                            result.error("invalid_argument", "sourcePath is required", null)
+                        } else {
+                            result.success(installApk(sourcePath))
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /** The installed versionCode, which release.sh sets to the commit count. */
+    private fun getAppBuildNumber(): Long {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+    }
+
+    private fun canInstallPackages(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
+
+    /** Opens "Install unknown apps" for this app (Android 8+ gates APK installs per app). */
+    private fun openInstallPermissionSettings() {
+        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+    }
+
+    /** Hands a downloaded APK (under cache/app_update/) to the system installer. */
+    private fun installApk(sourcePath: String): Boolean {
+        return try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.privatesandbox.fileprovider", File(sourcePath))
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "installApk failed for $sourcePath", e)
+            false
+        }
     }
 
     /**

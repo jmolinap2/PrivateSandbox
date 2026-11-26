@@ -4,9 +4,9 @@
 # otherwise take several separate tool calls every checkpoint.
 #
 # Usage: tool/deploy.sh [ip:port]
-# ip:port defaults to the last known wireless-debugging address. Pass a new
-# one when it changes (Ajustes > Opciones de desarrollador > Depuración
-# inalámbrica > "Dirección IP y puerto" shows the current value).
+# Sin argumento detecta el telefono (device=duchamp) por `adb devices -l` y,
+# si no aparece, por mDNS; el puerto inalambrico cambia, asi que no se guarda.
+# Se puede forzar un ip:port como argumento.
 #
 # Run `flutter analyze` separately before this — it's not included here on
 # purpose, its output needs to actually be read, not just piped through.
@@ -14,17 +14,45 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-DEVICE="${1:-192.168.1.98:37007}"
 ADB="/c/Android/Sdk/platform-tools/adb.exe"
+EXPECTED_DEVICE="duchamp"
+
+# Imprime el serial de un dispositivo conectado cuyo device sea $EXPECTED_DEVICE.
+find_connected() {
+  "$ADB" devices -l | tr -d '\r' |
+    awk -v d="device:$EXPECTED_DEVICE" '$2 == "device" && index($0, d) { print $1; exit }'
+}
+
+detect_device() {
+  local serial candidate
+  serial="$(find_connected)"
+  if [ -n "$serial" ]; then echo "$serial"; return 0; fi
+  # No aparece: conectar candidatos mDNS y volver a buscar por identidad.
+  for candidate in $("$ADB" mdns services | tr -d '\r' |
+      awk '/_adb-tls-connect._tcp/ { print $NF }'); do
+    "$ADB" connect "$candidate" >/dev/null 2>&1 || true
+  done
+  find_connected
+}
+
+if [ -n "${1:-}" ]; then
+  DEVICE="$1"
+  "$ADB" connect "$DEVICE" >/dev/null 2>&1 || true
+else
+  DEVICE="$(detect_device)"
+  if [ -z "$DEVICE" ]; then
+    echo "ERROR: no se encontro el telefono ($EXPECTED_DEVICE) por adb ni mDNS." >&2
+    echo "Revisa la depuracion inalambrica / el emparejamiento." >&2
+    exit 2
+  fi
+fi
+echo "==> dispositivo: $DEVICE"
 FLUTTER="$USERPROFILE/flutter/bin/flutter"
 APK="build/app/outputs/flutter-apk/app-debug.apk"
 PHONE_DEST="/sdcard/APK'S - DESARROLLOS/PrivateSandbox-1.0.0+1-debug.apk"
 
 echo "==> flutter build apk --debug"
-"$FLUTTER" build apk --debug
-
-echo "==> adb connect $DEVICE"
-"$ADB" connect "$DEVICE"
+"$FLUTTER" build apk --debug --build-number="$(git rev-list --count HEAD)"
 
 echo "==> adb install -r"
 "$ADB" -s "$DEVICE" install -r "$APK"

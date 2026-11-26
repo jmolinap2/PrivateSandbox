@@ -68,7 +68,7 @@ class _ViewerScreenState extends ConsumerState<ViewerScreen> {
           return const Scaffold(body: Center(child: Text('Archivo no encontrado.')));
         }
         return switch (file.category) {
-          FileCategory.image => ImageViewerScreen(file: file),
+          FileCategory.image => ImageViewerScreen(file: file, queue: _buildQueue(file, files)),
           FileCategory.video => VideoPlayerScreen(file: file, queue: _buildQueue(file, files)),
           FileCategory.audio => AudioPlayerScreen(file: file, queue: _buildQueue(file, files)),
           FileCategory.pdf => PdfViewerScreen(file: file),

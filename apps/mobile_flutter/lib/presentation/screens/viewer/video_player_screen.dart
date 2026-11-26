@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../application/providers.dart';
@@ -32,6 +34,7 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
 class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   late List<VaultFile> _queue;
   late int _index;
+  bool _isFullscreen = false;
 
   @override
   void initState() {
@@ -39,6 +42,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _queue = widget.queue.isEmpty ? [widget.file] : widget.queue;
     final found = _queue.indexWhere((f) => f.id == widget.file.id);
     _index = found < 0 ? 0 : found;
+  }
+
+  @override
+  void dispose() {
+    if (_isFullscreen) _restoreSystemChrome();
+    super.dispose();
   }
 
   VaultFile get _current => _queue[_index];
@@ -50,23 +59,43 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     setState(() => _index = index);
   }
 
+  void _restoreSystemChrome() {
+    SystemChrome.setPreferredOrientations([]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
+
+  void _setFullscreen(bool value) {
+    if (value) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      _restoreSystemChrome();
+    }
+    setState(() => _isFullscreen = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final file = _current;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(file.originalName),
-        actions: [
-          ShareActionButton(file: file),
-          IconButton(
-            icon: const Icon(Icons.file_download_outlined),
-            onPressed: () => restoreVaultFile(context, ref, file),
-          ),
-        ],
-      ),
+      appBar: _isFullscreen
+          ? null
+          : AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              title: Text(file.originalName),
+              actions: [
+                ShareActionButton(file: file),
+                IconButton(
+                  icon: const Icon(Icons.file_download_outlined),
+                  onPressed: () => restoreVaultFile(context, ref, file),
+                ),
+              ],
+            ),
       // Re-keyed per file so switching tracks re-runs decryption and rebuilds
       // the player body for the new file from scratch.
       body: DecryptedPlaybackView(
@@ -79,6 +108,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
           hasNext: _hasNext,
           onPrevious: _hasPrevious ? () => _goTo(_index - 1) : null,
           onNext: _hasNext ? () => _goTo(_index + 1) : null,
+          isFullscreen: _isFullscreen,
+          onToggleFullscreen: () => _setFullscreen(!_isFullscreen),
         ),
       ),
     );
@@ -92,6 +123,8 @@ class _VideoBody extends ConsumerStatefulWidget {
   final bool hasNext;
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
+  final bool isFullscreen;
+  final VoidCallback onToggleFullscreen;
 
   const _VideoBody({
     required this.vaultFile,
@@ -100,6 +133,8 @@ class _VideoBody extends ConsumerStatefulWidget {
     required this.hasNext,
     required this.onPrevious,
     required this.onNext,
+    required this.isFullscreen,
+    required this.onToggleFullscreen,
   });
 
   @override
@@ -109,6 +144,8 @@ class _VideoBody extends ConsumerStatefulWidget {
 class _VideoBodyState extends ConsumerState<_VideoBody>
     with WidgetsBindingObserver, RouteAware {
   static const _speeds = [0.5, 1.0, 1.25, 1.5, 2.0];
+  static const _hideControlsDelay = Duration(seconds: 3);
+  static const _seekStepSeconds = 10;
 
   late final VideoEngine _engine;
   late final PlaybackVisibilityController _visibility;
@@ -126,6 +163,12 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
   // A single vertical drag is either brightness (left half) or volume (right
   // half); decided at drag start so it can't flip mid-gesture.
   bool _verticalDragIsBrightness = false;
+
+  bool _controlsVisible = true;
+  Timer? _hideControlsTimer;
+
+  IconData? _doubleTapIcon;
+  Timer? _doubleTapBadgeTimer;
 
   // Guards against auto-advancing more than once for the same completion.
   bool _advanced = false;
@@ -155,6 +198,7 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
       setState(() => _ready = true);
       if (_visibility.canStartAutomatically) {
         await _engine.play();
+        _scheduleHideControls();
       }
     });
   }
@@ -201,6 +245,8 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
     if (_engine.value.isPlaying) {
       _engine.pause();
     }
+    _cancelHideControls();
+    setState(() => _controlsVisible = true);
   }
 
   void _onEngineTick() {
@@ -217,6 +263,8 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
     vaultRouteObserver.unsubscribe(this);
     _visibility.stop();
     _engine.removeListener(_onEngineTick);
+    _hideControlsTimer?.cancel();
+    _doubleTapBadgeTimer?.cancel();
     ref
         .read(vaultRepositoryProvider)
         .recordOpened(
@@ -230,13 +278,61 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
     super.dispose();
   }
 
+  void _cancelHideControls() {
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = null;
+  }
+
+  void _scheduleHideControls() {
+    _cancelHideControls();
+    if (!_engine.value.isPlaying) return;
+    _hideControlsTimer = Timer(_hideControlsDelay, () {
+      if (mounted) setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _onTapVideo() {
+    if (!_controlsVisible) {
+      setState(() => _controlsVisible = true);
+      _scheduleHideControls();
+      return;
+    }
+    _togglePlayback();
+  }
+
   void _togglePlayback() {
-    _engine.value.isPlaying ? _engine.pause() : _engine.play();
+    if (_engine.value.isPlaying) {
+      _engine.pause();
+      _cancelHideControls();
+      setState(() => _controlsVisible = true);
+    } else {
+      _engine.play();
+      setState(() => _controlsVisible = true);
+      _scheduleHideControls();
+    }
   }
 
   void _setSpeed(double speed) {
     setState(() => _speed = speed);
     _engine.setPlaybackSpeed(speed);
+  }
+
+  Future<void> _onDoubleTapDown(TapDownDetails details) async {
+    final width = MediaQuery.of(context).size.width;
+    final isForward = details.globalPosition.dx > width / 2;
+    final delta = Duration(seconds: isForward ? _seekStepSeconds : -_seekStepSeconds);
+    final target = _engine.value.position + delta;
+    final duration = _engine.value.duration;
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (target > duration ? duration : target);
+    await _engine.seekTo(clamped);
+    if (!mounted) return;
+    _doubleTapBadgeTimer?.cancel();
+    setState(() => _doubleTapIcon = isForward ? Icons.forward_10 : Icons.replay_10);
+    _doubleTapBadgeTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) setState(() => _doubleTapIcon = null);
+    });
   }
 
   void _onHorizontalDragStart(DragStartDetails details) {
@@ -315,7 +411,8 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
       child: AspectRatio(
         aspectRatio: _engine.value.aspectRatio,
         child: GestureDetector(
-          onTap: _togglePlayback,
+          onTap: _onTapVideo,
+          onDoubleTapDown: _onDoubleTapDown,
           onHorizontalDragStart: _onHorizontalDragStart,
           onHorizontalDragUpdate: _onHorizontalDragUpdate,
           onHorizontalDragEnd: _onHorizontalDragEnd,
@@ -326,16 +423,27 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
             alignment: Alignment.bottomCenter,
             children: [
               _engine.buildSurface(),
-              AnimatedBuilder(
-                animation: _engine,
-                builder: (context, _) => _engine.value.isPlaying
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 150),
+                child: _engine.value.isPlaying
                     ? const SizedBox.shrink()
                     : const Icon(
                         Icons.play_arrow,
+                        key: ValueKey('paused-icon'),
                         size: 64,
                         color: Colors.white70,
                       ),
               ),
+              if (_doubleTapIcon != null)
+                Positioned.fill(
+                  child: Center(
+                    child: AnimatedOpacity(
+                      opacity: _doubleTapIcon != null ? 1 : 0,
+                      duration: const Duration(milliseconds: 150),
+                      child: _Badge(icon: _doubleTapIcon!, label: '${_seekStepSeconds}s'),
+                    ),
+                  ),
+                ),
               if (_isSeeking)
                 Positioned.fill(
                   child: Center(
@@ -366,30 +474,55 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
                     ),
                   ),
                 ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: PopupMenuButton<double>(
-                  initialValue: _speed,
-                  onSelected: _setSpeed,
-                  itemBuilder: (context) => [
-                    for (final speed in _speeds)
-                      PopupMenuItem(value: speed, child: Text('${speed}x')),
-                  ],
-                  child: _Badge(
-                    icon: Icons.speed,
-                    label: '${_speed}x',
-                    compact: true,
+              IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: AnimatedOpacity(
+                  opacity: _controlsVisible ? 1 : 0,
+                  duration: const Duration(milliseconds: 250),
+                  child: Stack(
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Row(
+                          children: [
+                            PopupMenuButton<double>(
+                              initialValue: _speed,
+                              onSelected: _setSpeed,
+                              itemBuilder: (context) => [
+                                for (final speed in _speeds)
+                                  PopupMenuItem(value: speed, child: Text('${speed}x')),
+                              ],
+                              child: _Badge(
+                                icon: Icons.speed,
+                                label: '${_speed}x',
+                                compact: true,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: widget.onToggleFullscreen,
+                              child: _Badge(
+                                icon: widget.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                                label: '',
+                                compact: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _Controls(
+                        engine: _engine,
+                        format: _format,
+                        hasPrevious: widget.hasPrevious,
+                        hasNext: widget.hasNext,
+                        onPrevious: widget.onPrevious,
+                        onNext: widget.onNext,
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              _Controls(
-                engine: _engine,
-                format: _format,
-                hasPrevious: widget.hasPrevious,
-                hasNext: widget.hasNext,
-                onPrevious: widget.onPrevious,
-                onNext: widget.onNext,
               ),
             ],
           ),
@@ -502,8 +635,10 @@ class _Badge extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: Colors.white, size: compact ? 16 : 24),
-            const SizedBox(width: 6),
-            Text(label, style: const TextStyle(color: Colors.white)),
+            if (label.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(color: Colors.white)),
+            ],
           ],
         ),
       ),

@@ -1,0 +1,68 @@
+# En cada push a master que toque la app, compila el APK y lo publica como
+# GitHub Release `build-N` (N = numero de commits = versionCode). La app del
+# telefono consulta el ultimo release y se actualiza sola.
+#
+# Secreto requerido: DEBUG_KEYSTORE_B64 = ~/.android/debug.keystore en base64.
+# Se usa la MISMA firma que el APK instalado desde la PC, para que Android
+# acepte la actualizacion sin desinstalar (y sin perder los datos de la boveda).
+name: release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/mobile_flutter/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+          cache: true
+
+      - name: Restaurar keystore de debug
+        env:
+          KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo "Falta el secreto DEBUG_KEYSTORE_B64"; exit 1; }
+          mkdir -p ~/.android
+          echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+
+      - name: Compilar APK
+        working-directory: apps/mobile_flutter
+        run: |
+          BUILD=$(git rev-list --count HEAD)
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          flutter build apk --debug --build-number="$BUILD"
+          cp build/app/outputs/flutter-apk/app-debug.apk "PrivateSandbox-$BUILD.apk"
+
+      - name: Publicar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-$BUILD" "apps/mobile_flutter/PrivateSandbox-$BUILD.apk" \
+            --title "Build $BUILD (${GITHUB_SHA::7})" \
+            --notes "$(git log -1 --pretty=%s)" \
+            --target "$GITHUB_SHA" \
+            --latest

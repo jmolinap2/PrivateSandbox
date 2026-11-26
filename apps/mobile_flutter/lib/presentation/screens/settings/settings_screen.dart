@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/auth/auth_controller.dart';
 import '../../../application/providers.dart';
 import '../../../domain/entities/auto_lock_timeout.dart';
+import '../../../infrastructure/update/app_update_service.dart';
+import '../../widgets/app_update_flow.dart';
 import '../backup/backup_screen.dart';
 import '../organization/organization_screen.dart';
 import '../sharing/encrypted_share_import_screen.dart';
@@ -43,6 +45,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _autoLockTimeout = autoLockTimeout;
       _loading = false;
     });
+  }
+
+  Future<void> _checkForUpdate() async {
+    final service = ref.read(appUpdateServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final update = await service.checkForUpdate();
+      if (!mounted) return;
+      if (update == null) {
+        messenger.showSnackBar(const SnackBar(content: Text('Ya tienes la última versión.')));
+        return;
+      }
+      await downloadAndInstallUpdate(context, service, update);
+    } on AppUpdateException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _toggleBiometric(bool value) async {
@@ -168,6 +186,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       builder: (_) => const EncryptedShareImportScreen(),
                     ),
                   ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.system_update_outlined),
+                  title: const Text('Buscar actualización'),
+                  subtitle: const Text('Descarga la última versión publicada en GitHub'),
+                  onTap: _checkForUpdate,
                 ),
                 ListTile(
                   leading: const Icon(Icons.restart_alt_outlined),

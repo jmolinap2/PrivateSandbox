@@ -14,6 +14,8 @@
     <!-- Fase 4: encrypted WebDAV/self-hosted synchronization. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Self-update: installs the APK downloaded from GitHub Releases. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="PrivateSandbox"
