@@ -27,11 +27,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   AutoLockTimeout _autoLockTimeout = AutoLockTimeout.immediate;
   bool _loading = true;
   bool _checkingForUpdate = false;
+  int? _installedBuild;
+  AvailableUpdate? _availableUpdate;
+  String _updateStatus = 'Comprueba si hay una versión nueva.';
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadInstalledBuild();
+  }
+
+  Future<void> _loadInstalledBuild() async {
+    try {
+      final build = await ref
+          .read(appUpdateServiceProvider)
+          .installedBuildNumber();
+      if (mounted) setState(() => _installedBuild = build);
+    } catch (_) {
+      // The update check can still report its own error.
+    }
   }
 
   Future<void> _load() async {
@@ -50,28 +65,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _checkForUpdate() async {
     if (_checkingForUpdate) return;
-    setState(() => _checkingForUpdate = true);
+    setState(() {
+      _checkingForUpdate = true;
+      _availableUpdate = null;
+      _updateStatus = 'Buscando actualizaciones...';
+    });
     final service = ref.read(appUpdateServiceProvider);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final update = await service.checkForUpdate();
       if (!mounted) return;
-      if (update == null) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Ya tienes la última versión.')),
-        );
-        return;
-      }
-      await downloadAndInstallUpdate(context, service, update);
+      setState(() {
+        _availableUpdate = update;
+        _updateStatus = update == null
+            ? 'Ya tienes la última versión publicada.'
+            : 'Hay una versión nueva disponible: ${update.name} (compilación ${update.buildNumber}).';
+      });
     } on AppUpdateException catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      setState(() => _updateStatus = 'No se pudo comprobar: ${e.message}');
     } catch (_) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo comprobar si hay actualizaciones.'),
-        ),
+      setState(
+        () => _updateStatus = 'No se pudo comprobar si hay actualizaciones.',
       );
     } finally {
       if (mounted) setState(() => _checkingForUpdate = false);
@@ -222,24 +237,65 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.system_update_outlined),
-                  title: Text(
-                    _checkingForUpdate
-                        ? 'Buscando actualización...'
-                        : 'Buscar actualización',
+                Card(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
                   ),
-                  subtitle: const Text(
-                    'Comprueba la última versión publicada en GitHub',
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Actualizaciones',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _installedBuild == null
+                              ? 'Versión instalada no disponible'
+                              : 'Compilación instalada: $_installedBuild',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(_updateStatus),
+                        if (_availableUpdate case final update?) ...[
+                          if (update.message.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(update.message),
+                          ],
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: _checkingForUpdate
+                                ? null
+                                : () => downloadAndInstallUpdate(
+                                    context,
+                                    ref.read(appUpdateServiceProvider),
+                                    update,
+                                  ),
+                            icon: const Icon(Icons.download),
+                            label: const Text('Descargar e instalar'),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _checkingForUpdate
+                              ? null
+                              : _checkForUpdate,
+                          icon: _checkingForUpdate
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.refresh),
+                          label: const Text('Buscar actualizaciones'),
+                        ),
+                      ],
+                    ),
                   ),
-                  trailing: _checkingForUpdate
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : null,
-                  onTap: _checkingForUpdate ? null : _checkForUpdate,
                 ),
                 ListTile(
                   leading: const Icon(Icons.restart_alt_outlined),

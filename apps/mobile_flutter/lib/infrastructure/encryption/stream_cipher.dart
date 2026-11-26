@@ -53,7 +53,11 @@ class StreamCipher {
         if (chunk.isEmpty) break;
         hashConversion.add(chunk);
         final nonce = _buildNonce(noncePrefix, counter);
-        final box = await _algorithm.encrypt(chunk, secretKey: fileKey, nonce: nonce);
+        final box = await _algorithm.encrypt(
+          chunk,
+          secretKey: fileKey,
+          nonce: nonce,
+        );
         sink.add(box.cipherText);
         sink.add(box.mac.bytes);
         counter++;
@@ -74,12 +78,16 @@ class StreamCipher {
     required SecretKey fileKey,
     required Uint8List noncePrefix,
     required int plainFileSize,
+    bool Function()? isCancelled,
   }) async* {
     final raf = await input.open();
     try {
       var counter = 0;
       var remaining = plainFileSize;
       while (remaining > 0) {
+        if (isCancelled != null && isCancelled()) {
+          throw const CancelledException();
+        }
         final plainChunkLen = remaining >= chunkSize ? chunkSize : remaining;
         final cipherChunk = await raf.read(plainChunkLen);
         final macBytes = await raf.read(_macLength);
@@ -105,6 +113,7 @@ class StreamCipher {
     required SecretKey fileKey,
     required Uint8List noncePrefix,
     required int plainFileSize,
+    bool Function()? isCancelled,
   }) async {
     final digestSink = _DigestSink();
     final hashConversion = crypto.sha256.startChunkedConversion(digestSink);
@@ -113,6 +122,7 @@ class StreamCipher {
       fileKey: fileKey,
       noncePrefix: noncePrefix,
       plainFileSize: plainFileSize,
+      isCancelled: isCancelled,
     )) {
       hashConversion.add(chunk);
     }

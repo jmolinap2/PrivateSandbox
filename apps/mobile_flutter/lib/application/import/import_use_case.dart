@@ -152,6 +152,7 @@ class ImportUseCase {
         fileKey: fileKey,
         noncePrefix: noncePrefix,
         plainFileSize: sizeBytes,
+        isCancelled: isCancelled,
       );
       if (verifyHash != sourceHash) {
         throw const IntegrityException(

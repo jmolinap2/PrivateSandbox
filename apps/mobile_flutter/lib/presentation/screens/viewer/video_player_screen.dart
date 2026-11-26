@@ -166,6 +166,7 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
   bool _verticalDragIsBrightness = false;
 
   bool _controlsVisible = true;
+  bool _isDisposing = false;
   Timer? _hideControlsTimer;
 
   IconData? _doubleTapIcon;
@@ -252,7 +253,12 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
       _engine.pause();
     }
     _cancelHideControls();
-    setState(() => _controlsVisible = true);
+    // [stop] is also invoked while this state is being disposed. Calling
+    // setState then causes a framework error and can leave the player route
+    // in a bad state when the user closes it.
+    if (!_isDisposing && mounted) {
+      setState(() => _controlsVisible = true);
+    }
   }
 
   void _onEngineTick() {
@@ -265,6 +271,7 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
 
   @override
   void dispose() {
+    _isDisposing = true;
     WidgetsBinding.instance.removeObserver(this);
     vaultRouteObserver.unsubscribe(this);
     _visibility.stop();
