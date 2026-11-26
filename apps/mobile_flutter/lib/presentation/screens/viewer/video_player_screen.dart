@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../application/providers.dart';
 import '../../../domain/entities/vault_file.dart';
+import '../../../domain/repositories/vault_repository.dart';
+import '../../../infrastructure/platform/system_channel.dart';
 import '../../../media_engine/abstractions/video_engine.dart';
 import '../../navigation/route_observers.dart';
 import '../../playback/playback_visibility_controller.dart';
@@ -149,6 +151,8 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
 
   late final VideoEngine _engine;
   late final PlaybackVisibilityController _visibility;
+  late final VaultRepository _vaultRepository;
+  late final SystemChannel _systemChannel;
   ModalRoute<dynamic>? _route;
   bool _ready = false;
   bool _initializationFailed = false;
@@ -180,8 +184,10 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _engine = ref.read(videoEngineFactoryProvider)();
+    _vaultRepository = ref.read(vaultRepositoryProvider);
+    _systemChannel = ref.read(systemChannelProvider);
     _visibility = PlaybackVisibilityController(_pausePlayback);
-    ref.read(systemChannelProvider).getScreenBrightness().then((value) {
+    _systemChannel.getScreenBrightness().then((value) {
       if (mounted) setState(() => _brightness = value);
     });
     _engine.addListener(_onEngineTick);
@@ -278,15 +284,13 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
     _engine.removeListener(_onEngineTick);
     _hideControlsTimer?.cancel();
     _doubleTapBadgeTimer?.cancel();
-    ref
-        .read(vaultRepositoryProvider)
-        .recordOpened(
-          widget.vaultFile.id,
-          playbackPositionMs: _engine.value.position.inMilliseconds,
-        );
+    _vaultRepository.recordOpened(
+      widget.vaultFile.id,
+      playbackPositionMs: _engine.value.position.inMilliseconds,
+    );
     // Hand brightness control back to the system so the vault doesn't leave
     // the whole device dimmed after the player closes.
-    ref.read(systemChannelProvider).clearScreenBrightness();
+    _systemChannel.clearScreenBrightness();
     _engine.dispose();
     super.dispose();
   }
@@ -406,7 +410,7 @@ class _VideoBodyState extends ConsumerState<_VideoBody>
       setState(() {
         _brightness = (_brightness - details.delta.dy / height).clamp(0.0, 1.0);
       });
-      ref.read(systemChannelProvider).setScreenBrightness(_brightness);
+      _systemChannel.setScreenBrightness(_brightness);
     } else {
       setState(() {
         _volume = (_volume - details.delta.dy / height).clamp(0.0, 1.0);

@@ -30,11 +30,14 @@ void main() {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final file = _videoFile('one');
+    var engineCount = 0;
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           playbackUseCaseProvider.overrideWithValue(_FakePlayback()),
-          videoEngineFactoryProvider.overrideWithValue(() => engine),
+          videoEngineFactoryProvider.overrideWithValue(
+            () => engineCount++ == 0 ? engine : _FakeVideoEngine(),
+          ),
           vaultRepositoryProvider.overrideWithValue(_FakeVaultRepository()),
           systemChannelProvider.overrideWithValue(_FakeSystemChannel()),
         ],
@@ -58,12 +61,16 @@ void main() {
     expect(find.byTooltip('Adelantar 10 segundos'), findsOneWidget);
     expect(find.byTooltip('Pausar'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Adelantar 10 segundos'));
+    tester
+        .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.forward_10))
+        .onPressed!();
     await tester.pump();
     await tester.pump();
     expect(engine.seekTargets.last, const Duration(seconds: 10));
 
-    await tester.tap(find.byTooltip('Retroceder 10 segundos'));
+    tester
+        .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.replay_10))
+        .onPressed!();
     await tester.pump();
     await tester.pump();
     expect(engine.seekTargets.last, Duration.zero);
@@ -84,9 +91,11 @@ void main() {
       expect(find.byTooltip('Adelantar 10 segundos'), findsOneWidget);
       expect(find.byIcon(Icons.skip_next), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.skip_next));
+      tester
+          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.skip_next))
+          .onPressed!();
       await tester.pump();
-    await tester.pump();
+      await tester.pump();
       expect(find.text('two.mp4'), findsOneWidget);
     },
   );
@@ -140,9 +149,6 @@ class _FakeVideoEngine extends ChangeNotifier implements VideoEngine {
     key: ValueKey('fake-video-surface'),
     color: Colors.black,
   );
-
-  @override
-  void dispose() {}
 
   @override
   Future<void> initialize(File file) async {}

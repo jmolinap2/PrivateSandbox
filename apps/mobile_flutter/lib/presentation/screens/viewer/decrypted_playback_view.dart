@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../application/playback/playback_use_case.dart';
 import '../../../application/providers.dart';
 import '../../../domain/entities/vault_file.dart';
 
@@ -27,21 +28,22 @@ class DecryptedPlaybackView extends ConsumerStatefulWidget {
 class _DecryptedPlaybackViewState extends ConsumerState<DecryptedPlaybackView> {
   File? _decryptedFile;
   Object? _error;
+  late final PlaybackUseCase _playback;
 
   @override
   void initState() {
     super.initState();
+    _playback = ref.read(playbackUseCaseProvider);
     _load();
   }
 
   Future<void> _load() async {
-    final playback = ref.read(playbackUseCaseProvider);
     try {
-      final file = await playback.decryptToTemp(widget.file);
+      final file = await _playback.decryptToTemp(widget.file);
       if (mounted) {
         setState(() => _decryptedFile = file);
       } else {
-        await playback.cleanupTemp(file);
+        await _playback.cleanupTemp(file);
       }
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -52,7 +54,7 @@ class _DecryptedPlaybackViewState extends ConsumerState<DecryptedPlaybackView> {
   void dispose() {
     final decrypted = _decryptedFile;
     if (decrypted != null) {
-      ref.read(playbackUseCaseProvider).cleanupTemp(decrypted);
+      _playback.cleanupTemp(decrypted);
     }
     super.dispose();
   }

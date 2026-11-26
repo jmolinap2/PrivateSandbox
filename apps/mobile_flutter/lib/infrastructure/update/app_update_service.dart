@@ -11,6 +11,7 @@ class AvailableUpdate {
   final String message;
   final Uri apkUrl;
   final int sizeBytes;
+  final String certificateSha256;
 
   const AvailableUpdate({
     required this.buildNumber,
@@ -18,6 +19,7 @@ class AvailableUpdate {
     required this.message,
     required this.apkUrl,
     required this.sizeBytes,
+    required this.certificateSha256,
   });
 }
 
@@ -39,6 +41,9 @@ class AppUpdateService {
     final value = await _channel.invokeMethod<int>('getAppBuildNumber');
     return value ?? 0;
   }
+
+  Future<String?> installedCertificateSha256() =>
+      _channel.invokeMethod<String>('getSigningCertificateSha256');
 
   /// Returns the published update if it is newer than the installed build,
   /// null if up to date. Throws [AppUpdateException] on network/server errors.
@@ -66,12 +71,26 @@ class AppUpdateService {
       final json = jsonDecode(body) as Map<String, dynamic>;
       final build = json['build'] as int;
       if (build <= await installedBuildNumber()) return null;
+      final publishedCertificate = (json['certificateSha256'] as String? ?? '')
+          .toLowerCase();
+      if (publishedCertificate.isNotEmpty) {
+        final installedCertificate = (await installedCertificateSha256() ?? '')
+            .toLowerCase();
+        if (installedCertificate.isEmpty ||
+            !_sameCertificate(installedCertificate, publishedCertificate)) {
+          throw const AppUpdateException(
+            'Esta actualización fue firmada con otra clave y Android no puede instalarla. '
+            'El canal de GitHub debe usar la misma clave que la app instalada.',
+          );
+        }
+      }
       return AvailableUpdate(
         buildNumber: build,
         name: json['name'] as String? ?? '',
         message: json['message'] as String? ?? '',
         apkUrl: baseUrl.resolve(json['apk'] as String),
         sizeBytes: json['bytes'] as int,
+        certificateSha256: publishedCertificate,
       );
     } on SocketException {
       throw const AppUpdateException('Sin conexión.');
@@ -135,6 +154,9 @@ class AppUpdateService {
         'sourcePath': apkPath,
       }) ??
       false;
+
+  static bool _sameCertificate(String left, String right) =>
+      left.replaceAll(':', '') == right.replaceAll(':', '');
 }
 
 class AppUpdateException implements Exception {

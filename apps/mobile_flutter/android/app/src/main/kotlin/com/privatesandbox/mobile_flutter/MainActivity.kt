@@ -3,6 +3,7 @@ package com.privatesandbox.mobile_flutter
 import android.app.RecoverableSecurityException
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -24,6 +25,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.security.MessageDigest
 
 private const val TAG = "PrivateSandboxMedia"
 
@@ -191,6 +193,7 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                     }
                     "getAppBuildNumber" -> result.success(getAppBuildNumber())
+                    "getSigningCertificateSha256" -> result.success(getSigningCertificateSha256())
                     "canInstallPackages" -> result.success(canInstallPackages())
                     "openInstallPermissionSettings" -> {
                         openInstallPermissionSettings()
@@ -213,6 +216,28 @@ class MainActivity : FlutterFragmentActivity() {
     private fun getAppBuildNumber(): Long {
         val info = packageManager.getPackageInfo(packageName, 0)
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+    }
+
+    /** Fingerprint of the certificate that Android uses to authorize updates. */
+    private fun getSigningCertificateSha256(): String? = try {
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
+        }
+        val signature = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.signingInfo?.apkContentsSigners?.firstOrNull()
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.signatures?.firstOrNull()
+        } ?: return null
+        MessageDigest.getInstance("SHA-256")
+            .digest(signature.toByteArray())
+            .joinToString("") { byte -> "%02x".format(byte) }
+    } catch (e: Exception) {
+        Log.e(TAG, "Unable to read application signing certificate", e)
+        null
     }
 
     private fun canInstallPackages(): Boolean =
