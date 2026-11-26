@@ -1,1 +1,3 @@
 *.apk
+# APKs compilados: se publican como GitHub Releases, no en el repo
+*.apk
