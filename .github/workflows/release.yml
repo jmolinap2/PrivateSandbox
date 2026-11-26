@@ -1,11 +1,15 @@
-# En cada push a master que toque la app, compila el APK y lo publica como
-# GitHub Release `build-N` (N = numero de commits = versionCode). La app del
-# telefono consulta el ultimo release y se actualiza sola.
+name: Publicar actualización
+
+# Cada push a master que toque la app compila el APK release (solo ARM64) y lo
+# publica en el release fijo `latest` junto a un version.json; la app instalada
+# lo consulta y ofrece actualizarse. Requiere repo publico (la app descarga sin
+# credenciales).
 #
-# Secreto requerido: DEBUG_KEYSTORE_B64 = ~/.android/debug.keystore en base64.
-# Se usa la MISMA firma que el APK instalado desde la PC, para que Android
-# acepte la actualizacion sin desinstalar (y sin perder los datos de la boveda).
-name: release
+# Secreto (Settings > Secrets and variables > Actions):
+#   ANDROID_DEBUG_KEYSTORE_B64  ~/.android/debug.keystore en base64. El build
+#       release se firma con esa clave (android/app/build.gradle.kts); sin la
+#       misma firma que el APK instalado Android rechaza la actualizacion.
+#       Generar: base64 -w0 ~/.android/debug.keystore
 
 on:
   push:
@@ -15,20 +19,21 @@ on:
       - '.github/workflows/release.yml'
   workflow_dispatch:
 
+# Un despliegue a la vez; si llegan varios commits seguidos, gana el mas reciente.
 concurrency:
-  group: release
-  cancel-in-progress: false
-
-permissions:
-  contents: write
+  group: publicar-actualizacion
+  cancel-in-progress: true
 
 jobs:
-  build:
+  publicar:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # el numero de compilacion sale del numero de commits
 
       - uses: actions/setup-java@v4
         with:
@@ -38,31 +43,49 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.44.4'
+          flutter-version: 3.44.4
           cache: true
 
-      - name: Restaurar keystore de debug
+      - name: Restaurar la clave de firma
         env:
-          KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
         run: |
-          test -n "$KEYSTORE_B64" || { echo "Falta el secreto DEBUG_KEYSTORE_B64"; exit 1; }
+          test -n "$KEYSTORE_B64" || { echo "Falta el secreto ANDROID_DEBUG_KEYSTORE_B64"; exit 1; }
           mkdir -p ~/.android
           echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
 
-      - name: Compilar APK
+      - name: Compilar
         working-directory: apps/mobile_flutter
         run: |
+          # Misma formula que tool/deploy.sh.
           BUILD=$(git rev-list --count HEAD)
           echo "BUILD=$BUILD" >> "$GITHUB_ENV"
-          flutter build apk --debug --build-number="$BUILD"
-          cp build/app/outputs/flutter-apk/app-debug.apk "PrivateSandbox-$BUILD.apk"
+          flutter pub get
+          flutter build apk --release \
+            --build-number="$BUILD" --target-platform android-arm64
 
-      - name: Publicar release
+      - name: Preparar el sitio
+        run: |
+          mkdir site
+          cp apps/mobile_flutter/build/app/outputs/flutter-apk/app-release.apk site/PrivateSandbox.apk
+          NAME=$(sed -n 's/^version: *\([0-9A-Za-z.-]*\)+.*/\1/p' apps/mobile_flutter/pubspec.yaml)
+          jq -n \
+            --argjson build "$BUILD" \
+            --arg name "$NAME" \
+            --arg message "$(git log -1 --format=%s)" \
+            --argjson bytes "$(stat -c %s site/PrivateSandbox.apk)" \
+            '{build:$build, name:$name, message:$message, apk:"PrivateSandbox.apk", bytes:$bytes}' \
+            > site/version.json
+          cat site/version.json
+
+      - name: Publicar en el release latest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "build-$BUILD" "apps/mobile_flutter/PrivateSandbox-$BUILD.apk" \
-            --title "Build $BUILD (${GITHUB_SHA::7})" \
-            --notes "$(git log -1 --pretty=%s)" \
-            --target "$GITHUB_SHA" \
-            --latest
+          gh release view latest >/dev/null 2>&1 || gh release create latest \
+            --title "Última versión" \
+            --notes "Publicado automáticamente por CI; la app lo consulta."
+          # Primero el APK y despues el manifiesto: la app nunca ve un
+          # version.json que apunte a un APK aun inexistente.
+          gh release upload latest site/PrivateSandbox.apk --clobber
+          gh release upload latest site/version.json --clobber

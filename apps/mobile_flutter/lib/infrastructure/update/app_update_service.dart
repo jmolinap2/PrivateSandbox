@@ -4,27 +4,35 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// A newer build published as a GitHub Release by `tool/release.sh`.
+/// Lo que publica el CI en `version.json` junto a cada APK.
 class AvailableUpdate {
   final int buildNumber;
-  final String downloadUrl;
+  final String name;
+  final String message;
+  final Uri apkUrl;
   final int sizeBytes;
 
   const AvailableUpdate({
     required this.buildNumber,
-    required this.downloadUrl,
+    required this.name,
+    required this.message,
+    required this.apkUrl,
     required this.sizeBytes,
   });
 }
 
-/// Self-update from GitHub Releases (the repo is public, so no token is
-/// needed; unauthenticated API calls allow 60/hour per IP, plenty here).
+/// Self-update from the fixed GitHub release `latest`, where
+/// `.github/workflows/release.yml` publishes `PrivateSandbox.apk` and a
+/// `version.json` ({build, name, message, apk, bytes}) on every push to master.
 ///
-/// Releases are tagged `build-N`, where N is the git commit count that
-/// the release workflow also uses as the APK's versionCode, so "newer" is simply
-/// N > installed versionCode.
+/// `build` is the git commit count, which the workflow (and tool/deploy.sh)
+/// also use as the APK's versionCode, so "newer" is simply build > installed.
+/// The repo is public, so no credentials (and no GitHub API rate limit) are
+/// involved: both files are plain downloads.
 class AppUpdateService {
-  static const repository = 'jmolinap2/PrivateSandbox';
+  static final Uri baseUrl = Uri.parse(
+    'https://github.com/jmolinap2/PrivateSandbox/releases/download/latest/',
+  );
   static const _channel = MethodChannel('privatesandbox.app/system');
 
   Future<int> installedBuildNumber() async {
@@ -32,49 +40,48 @@ class AppUpdateService {
     return value ?? 0;
   }
 
-  /// Returns the latest release if it is newer than the installed build,
-  /// null if up to date. Throws [AppUpdateException] on
-  /// network or API errors.
+  /// Returns the published update if it is newer than the installed build,
+  /// null if up to date. Throws [AppUpdateException] on network/server errors.
   Future<AvailableUpdate?> checkForUpdate() async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await client.getUrl(
-        Uri.parse('https://api.github.com/repos/$repository/releases/latest'),
+      // The query string keeps an intermediate cache from serving an old manifest.
+      final uri = baseUrl.resolve(
+        'version.json?t=${DateTime.now().millisecondsSinceEpoch}',
       );
-      _headers(request);
-      request.headers.set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
+      final request = await client.getUrl(uri);
       final response = await request.close();
       final body = await response.transform(utf8.decoder).join();
-      if (response.statusCode == 404) return null; // No release published yet.
-      if (response.statusCode == 403) {
-        throw const AppUpdateException('GitHub limitó las consultas; reintenta más tarde.');
-      }
+      if (response.statusCode == 404) return null; // Nothing published yet.
       if (response.statusCode != 200) {
-        throw AppUpdateException('GitHub respondió ${response.statusCode}.');
+        throw AppUpdateException('El servidor respondió ${response.statusCode}.');
       }
       final json = jsonDecode(body) as Map<String, dynamic>;
-      final tag = json['tag_name'] as String? ?? '';
-      final latest = int.tryParse(tag.replaceFirst('build-', ''));
-      if (latest == null) return null;
-      if (latest <= await installedBuildNumber()) return null;
-      final assets =
-          (json['assets'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-      final apks = assets.where((a) => (a['name'] as String? ?? '').endsWith('.apk'));
-      if (apks.isEmpty) return null;
+      final build = json['build'] as int;
+      if (build <= await installedBuildNumber()) return null;
       return AvailableUpdate(
-        buildNumber: latest,
-        downloadUrl: apks.first['browser_download_url'] as String,
-        sizeBytes: (apks.first['size'] as num?)?.toInt() ?? 0,
+        buildNumber: build,
+        name: json['name'] as String? ?? '',
+        message: json['message'] as String? ?? '',
+        apkUrl: baseUrl.resolve(json['apk'] as String),
+        sizeBytes: json['bytes'] as int,
       );
     } on SocketException {
       throw const AppUpdateException('Sin conexión.');
+    } on FormatException {
+      throw const AppUpdateException('Respuesta de actualización inválida.');
     } finally {
       client.close(force: true);
     }
   }
 
-  /// Downloads the APK and returns its local path (under cache/app_update/).
-  Future<String> download(AvailableUpdate update) async {
+  /// Downloads the APK (progress 0..1 via [onProgress]) and returns its local
+  /// path under cache/app_update/. Fails if the size differs from the
+  /// published one, so a truncated download never reaches the installer.
+  Future<String> download(
+    AvailableUpdate update, {
+    void Function(double progress)? onProgress,
+  }) async {
     final dir = Directory('${(await getTemporaryDirectory()).path}/app_update');
     if (dir.existsSync()) dir.deleteSync(recursive: true);
     dir.createSync(recursive: true);
@@ -82,16 +89,24 @@ class AppUpdateService {
 
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await client.getUrl(Uri.parse(update.downloadUrl));
-      _headers(request);
+      final request = await client.getUrl(update.apkUrl);
       final response = await request.close();
       if (response.statusCode != 200) {
         throw AppUpdateException('La descarga falló (${response.statusCode}).');
       }
-      await response.pipe(target.openWrite());
-      if (update.sizeBytes > 0 && target.lengthSync() != update.sizeBytes) {
+      final sink = target.openWrite();
+      var received = 0;
+      await for (final chunk in response) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (update.sizeBytes > 0) onProgress?.call(received / update.sizeBytes);
+      }
+      await sink.close();
+      if (received != update.sizeBytes) {
         target.deleteSync();
-        throw const AppUpdateException('Descarga incompleta, reintenta.');
+        throw AppUpdateException(
+          'Descarga incompleta: $received de ${update.sizeBytes} bytes.',
+        );
       }
       return target.path;
     } on SocketException {
@@ -109,11 +124,6 @@ class AppUpdateService {
 
   Future<bool> install(String apkPath) async =>
       await _channel.invokeMethod<bool>('installApk', {'sourcePath': apkPath}) ?? false;
-
-  void _headers(HttpClientRequest request) {
-    request.headers.set('X-GitHub-Api-Version', '2022-11-28');
-    request.headers.set(HttpHeaders.userAgentHeader, 'PrivateSandbox-updater');
-  }
 }
 
 class AppUpdateException implements Exception {

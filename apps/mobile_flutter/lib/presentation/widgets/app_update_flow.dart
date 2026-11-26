@@ -5,7 +5,7 @@ import '../../application/providers.dart';
 import '../../infrastructure/update/app_update_service.dart';
 
 /// Checks for a newer release once per session, when first shown, and offers
-/// to install it. Silent when there is no token, no network or nothing new.
+/// to install it. Silent when there is no network or nothing new.
 class UpdateCheckOnStart extends ConsumerStatefulWidget {
   final Widget child;
   const UpdateCheckOnStart({super.key, required this.child});
@@ -33,7 +33,11 @@ class _UpdateCheckOnStartState extends ConsumerState<UpdateCheckOnStart> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 12),
-          content: Text('Hay una versión nueva (build ${update.buildNumber}).'),
+          content: Text(
+            update.message.isEmpty
+                ? 'Hay una versión nueva (build ${update.buildNumber}).'
+                : 'Versión nueva: ${update.message}',
+          ),
           action: SnackBarAction(
             label: 'Actualizar',
             onPressed: () => downloadAndInstallUpdate(context, service, update),
@@ -69,21 +73,31 @@ Future<void> downloadAndInstallUpdate(
     return;
   }
   if (!context.mounted) return;
+  final progress = ValueNotifier<double>(0);
   showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const AlertDialog(
-      content: Row(
-        children: [
-          CircularProgressIndicator(),
-          SizedBox(width: 20),
-          Expanded(child: Text('Descargando actualización…')),
-        ],
+    builder: (_) => AlertDialog(
+      title: const Text('Descargando actualización'),
+      content: ValueListenableBuilder<double>(
+        valueListenable: progress,
+        builder: (_, value, _) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LinearProgressIndicator(value: value > 0 ? value : null),
+            const SizedBox(height: 8),
+            Text('${(value * 100).clamp(0, 100).toStringAsFixed(0)} %'),
+          ],
+        ),
       ),
     ),
   );
   try {
-    final path = await service.download(update);
+    final path = await service.download(
+      update,
+      onProgress: (value) => progress.value = value,
+    );
     navigator.pop();
     if (!await service.install(path)) {
       messenger.showSnackBar(
@@ -96,5 +110,7 @@ Future<void> downloadAndInstallUpdate(
   } catch (e) {
     navigator.pop();
     messenger.showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
+  } finally {
+    progress.dispose();
   }
 }
