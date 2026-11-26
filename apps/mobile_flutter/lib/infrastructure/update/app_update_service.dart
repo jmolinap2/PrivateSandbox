@@ -43,7 +43,8 @@ class AppUpdateService {
   /// Returns the published update if it is newer than the installed build,
   /// null if up to date. Throws [AppUpdateException] on network/server errors.
   Future<AvailableUpdate?> checkForUpdate() async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
     try {
       // The query string keeps an intermediate cache from serving an old manifest.
       final uri = baseUrl.resolve(
@@ -52,9 +53,15 @@ class AppUpdateService {
       final request = await client.getUrl(uri);
       final response = await request.close();
       final body = await response.transform(utf8.decoder).join();
-      if (response.statusCode == 404) return null; // Nothing published yet.
+      if (response.statusCode == 404) {
+        throw const AppUpdateException(
+          'No se encontró la información de actualización en GitHub.',
+        );
+      }
       if (response.statusCode != 200) {
-        throw AppUpdateException('El servidor respondió ${response.statusCode}.');
+        throw AppUpdateException(
+          'El servidor respondió ${response.statusCode}.',
+        );
       }
       final json = jsonDecode(body) as Map<String, dynamic>;
       final build = json['build'] as int;
@@ -87,7 +94,8 @@ class AppUpdateService {
     dir.createSync(recursive: true);
     final target = File('${dir.path}/update-${update.buildNumber}.apk');
 
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
     try {
       final request = await client.getUrl(update.apkUrl);
       final response = await request.close();
@@ -123,7 +131,10 @@ class AppUpdateService {
       _channel.invokeMethod<void>('openInstallPermissionSettings');
 
   Future<bool> install(String apkPath) async =>
-      await _channel.invokeMethod<bool>('installApk', {'sourcePath': apkPath}) ?? false;
+      await _channel.invokeMethod<bool>('installApk', {
+        'sourcePath': apkPath,
+      }) ??
+      false;
 }
 
 class AppUpdateException implements Exception {

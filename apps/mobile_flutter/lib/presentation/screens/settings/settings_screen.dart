@@ -26,6 +26,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _biometricEnabled = false;
   AutoLockTimeout _autoLockTimeout = AutoLockTimeout.immediate;
   bool _loading = true;
+  bool _checkingForUpdate = false;
 
   @override
   void initState() {
@@ -48,18 +49,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _checkForUpdate() async {
+    if (_checkingForUpdate) return;
+    setState(() => _checkingForUpdate = true);
     final service = ref.read(appUpdateServiceProvider);
     final messenger = ScaffoldMessenger.of(context);
     try {
       final update = await service.checkForUpdate();
       if (!mounted) return;
       if (update == null) {
-        messenger.showSnackBar(const SnackBar(content: Text('Ya tienes la última versión.')));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Ya tienes la última versión.')),
+        );
         return;
       }
       await downloadAndInstallUpdate(context, service, update);
     } on AppUpdateException catch (e) {
+      if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo comprobar si hay actualizaciones.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _checkingForUpdate = false);
     }
   }
 
@@ -79,7 +94,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final option in AutoLockTimeout.values)
-                RadioListTile<AutoLockTimeout>(title: Text(option.label), value: option),
+                RadioListTile<AutoLockTimeout>(
+                  title: Text(option.label),
+                  value: option,
+                ),
             ],
           ),
         ),
@@ -118,7 +136,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.timer_outlined),
                   title: const Text('Bloqueo automático'),
-                  subtitle: Text('Al volver a la app tras: ${_autoLockTimeout.label}'),
+                  subtitle: Text(
+                    'Al volver a la app tras: ${_autoLockTimeout.label}',
+                  ),
                   onTap: _pickAutoLockTimeout,
                 ),
                 ListTile(
@@ -130,19 +150,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.label_outline),
                   title: const Text('Organización'),
-                  subtitle: const Text('Etiquetas, colecciones y álbumes inteligentes'),
+                  subtitle: const Text(
+                    'Etiquetas, colecciones y álbumes inteligentes',
+                  ),
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const OrganizationScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const OrganizationScreen(),
+                    ),
                   ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.delete_outline),
                   title: const Text('Papelera'),
-                  trailing: ref.watch(vaultTrashedFilesStreamProvider).maybeWhen(
-                        data: (files) => files.isEmpty ? null : CircleAvatar(
-                          radius: 12,
-                          child: Text('${files.length}', style: const TextStyle(fontSize: 12)),
-                        ),
+                  trailing: ref
+                      .watch(vaultTrashedFilesStreamProvider)
+                      .maybeWhen(
+                        data: (files) => files.isEmpty
+                            ? null
+                            : CircleAvatar(
+                                radius: 12,
+                                child: Text(
+                                  '${files.length}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
                         orElse: () => null,
                       ),
                   onTap: () => Navigator.of(context).push(
@@ -152,7 +183,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.pie_chart_outline),
                   title: const Text('Almacenamiento'),
-                  subtitle: const Text('Espacio usado, duplicados, limpiar caché'),
+                  subtitle: const Text(
+                    'Espacio usado, duplicados, limpiar caché',
+                  ),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const StorageScreen()),
                   ),
@@ -160,7 +193,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.backup_outlined),
                   title: const Text('Copia de seguridad'),
-                  subtitle: const Text('Exportar o restaurar la bóveda completa'),
+                  subtitle: const Text(
+                    'Exportar o restaurar la bóveda completa',
+                  ),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const BackupScreen()),
                   ),
@@ -171,9 +206,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   subtitle: const Text(
                     'WebDAV, varios dispositivos y modo sólo local',
                   ),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SyncScreen()),
-                  ),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const SyncScreen())),
                 ),
                 ListTile(
                   leading: const Icon(Icons.download_for_offline_outlined),
@@ -189,19 +224,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.system_update_outlined),
-                  title: const Text('Buscar actualización'),
-                  subtitle: const Text('Descarga la última versión publicada en GitHub'),
-                  onTap: _checkForUpdate,
+                  title: Text(
+                    _checkingForUpdate
+                        ? 'Buscando actualización...'
+                        : 'Buscar actualización',
+                  ),
+                  subtitle: const Text(
+                    'Comprueba la última versión publicada en GitHub',
+                  ),
+                  trailing: _checkingForUpdate
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                  onTap: _checkingForUpdate ? null : _checkForUpdate,
                 ),
                 ListTile(
                   leading: const Icon(Icons.restart_alt_outlined),
                   title: const Text('Restablecer preguntas de importación'),
-                  subtitle: const Text('Vuelve a preguntar "Eliminar originales"'),
+                  subtitle: const Text(
+                    'Vuelve a preguntar "Eliminar originales"',
+                  ),
                   onTap: () async {
                     await ref.read(importPreferencesProvider).resetAll();
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Preferencias de importación restablecidas.')),
+                      const SnackBar(
+                        content: Text(
+                          'Preferencias de importación restablecidas.',
+                        ),
+                      ),
                     );
                   },
                 ),
