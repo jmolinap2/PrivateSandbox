@@ -82,7 +82,7 @@ jobs:
           # Sin pipefail un fallo de apksigner pasaba en silencio: se captura y se muestra.
           SIGNER_OUT=$("$APKSIGNER" verify --print-certs site/PrivateSandbox.apk 2>&1) || true
           echo "$SIGNER_OUT"
-          CERTIFICATE_SHA256=$(echo "$SIGNER_OUT" | sed -n 's/.*certificate SHA-256 digest: *//p' | head -1 | tr -d '' | tr 'A-Z' 'a-z')
+          CERTIFICATE_SHA256=$(echo "$SIGNER_OUT" | sed -n 's/.*certificate SHA-256 digest: *//p' | head -1 | tr -d '[:space:]' | tr 'A-Z' 'a-z')
           test -n "$CERTIFICATE_SHA256" || { echo "No se pudo leer el certificado del APK"; exit 1; }
           test "$CERTIFICATE_SHA256" = "$KEYSTORE_SHA256" ||
             { echo "::error::El APK quedo firmado con $CERTIFICATE_SHA256 y no con la clave del secreto ($KEYSTORE_SHA256): Android rechazaria la actualizacion."; exit 1; }
