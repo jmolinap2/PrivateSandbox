@@ -79,7 +79,10 @@ jobs:
           NAME=$(sed -n 's/^version: *\([0-9A-Za-z.-]*\)+.*/\1/p' apps/mobile_flutter/pubspec.yaml)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
           test -n "$APKSIGNER" || { echo "No se encontró apksigner"; exit 1; }
-          CERTIFICATE_SHA256=$($APKSIGNER verify --print-certs site/PrivateSandbox.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          # Sin pipefail un fallo de apksigner pasaba en silencio: se captura y se muestra.
+          SIGNER_OUT=$("$APKSIGNER" verify --print-certs site/PrivateSandbox.apk 2>&1) || true
+          echo "$SIGNER_OUT"
+          CERTIFICATE_SHA256=$(echo "$SIGNER_OUT" | sed -n 's/.*certificate SHA-256 digest: *//p' | head -1 | tr -d '' | tr 'A-Z' 'a-z')
           test -n "$CERTIFICATE_SHA256" || { echo "No se pudo leer el certificado del APK"; exit 1; }
           test "$CERTIFICATE_SHA256" = "$KEYSTORE_SHA256" ||
             { echo "::error::El APK quedo firmado con $CERTIFICATE_SHA256 y no con la clave del secreto ($KEYSTORE_SHA256): Android rechazaria la actualizacion."; exit 1; }
