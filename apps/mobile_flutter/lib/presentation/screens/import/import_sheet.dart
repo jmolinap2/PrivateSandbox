@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 import '../../../application/import/import_progress.dart';
 import '../../../application/import/picked_file.dart';
@@ -45,6 +46,29 @@ Future<ImportBatchResult> runImportFlow(
   final tick = ValueNotifier<int>(0);
   final cancelToken = _CancelToken();
 
+  // Gallery originals whose deletion is deferred to a single batch call.
+  final deferredDeletions = <({String assetId, String vaultFileId, String sha256Hash})>[];
+
+  Future<void> deleteDeferredOriginals() async {
+    if (deferredDeletions.isEmpty) return;
+    try {
+      final deleted = (await PhotoManager.editor.deleteWithIds(
+        [for (final d in deferredDeletions) d.assetId],
+      )).toSet();
+      final repository = ref.read(vaultRepositoryProvider);
+      for (final d in deferredDeletions.where((d) => deleted.contains(d.assetId))) {
+        await repository.completeImport(
+          id: d.vaultFileId,
+          sha256Hash: d.sha256Hash,
+          originalDeleted: true,
+        );
+      }
+    } catch (_) {
+      // Same policy as the per-file path: a failed delete is not an import
+      // failure; the originals just stay where they are.
+    }
+  }
+
   Future<void> runAll() async {
     for (final state in states) {
       // Files not yet started when the user cancels are marked cancelled
@@ -60,10 +84,19 @@ Future<ImportBatchResult> runImportFlow(
             .call(
               pickedFile: state.file,
               deleteOriginal: deleteOriginal,
+              deferGalleryDeletion: true,
               isCancelled: () => cancelToken.cancelled,
             )
             .forEach((progress) {
           state.stage = progress.stage;
+          final assetId = progress.deferredGalleryAssetId;
+          if (assetId != null && progress.vaultFileId != null && progress.sha256Hash != null) {
+            deferredDeletions.add((
+              assetId: assetId,
+              vaultFileId: progress.vaultFileId!,
+              sha256Hash: progress.sha256Hash!,
+            ));
+          }
           tick.value++;
         });
       } catch (_) {
@@ -71,6 +104,7 @@ Future<ImportBatchResult> runImportFlow(
         tick.value++;
       }
     }
+    await deleteDeferredOriginals();
   }
 
   final future = runAll();

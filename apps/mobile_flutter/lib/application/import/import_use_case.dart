@@ -58,6 +58,11 @@ class ImportUseCase {
     required PickedFile pickedFile,
     required bool deleteOriginal,
     bool Function()? isCancelled,
+    // When true, a gallery original is NOT deleted here: its asset id is
+    // returned in the final progress event so the caller can delete the whole
+    // batch at once. Android shows one "Permitir" consent dialog per delete
+    // call, which made importing several videos tedious.
+    bool deferGalleryDeletion = false,
   }) async* {
     final id = _uuid.v4();
     final blobsDir = await _blobsDirectory();
@@ -188,7 +193,14 @@ class ImportUseCase {
       // point on, recovery promotes the vault copy instead of deleting it,
       // so deleting the source can never destroy the only usable copy.
       var originalDeleted = false;
-      if (deleteOriginal) {
+      String? deferredAssetId;
+      final galleryAssetId = pickedFile.galleryAssetId;
+      if (deleteOriginal &&
+          deferGalleryDeletion &&
+          galleryAssetId != null &&
+          galleryAssetId.isNotEmpty) {
+        deferredAssetId = galleryAssetId;
+      } else if (deleteOriginal) {
         originalDeleted = await _deleteOriginalBestEffort(
           pickedFile,
           sourceFile,
@@ -203,7 +215,13 @@ class ImportUseCase {
       draftResolved = true;
       await _logImportBestEffort(pickedFile.name, success: true);
 
-      yield ImportProgress(ImportStage.done, pickedFile.name);
+      yield ImportProgress(
+        ImportStage.done,
+        pickedFile.name,
+        vaultFileId: id,
+        sha256Hash: sourceHash,
+        deferredGalleryAssetId: deferredAssetId,
+      );
     } on CancelledException {
       // User aborted mid-import: roll the draft back exactly like a failure,
       // but report it as a clean cancellation — no "failed" activity entry,
